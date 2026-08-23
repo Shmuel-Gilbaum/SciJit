@@ -2672,8 +2672,8 @@ def _uni_roots(t, c, k):
 
 
 _uni_spec = [
-    ('t', float64[:]),
-    ('c', float64[:]),
+    ('t', float64[::1]),
+    ('c', float64[::1]),
     ('k', int64),
     ('fp', float64),
     ('ier', int64),
@@ -3807,9 +3807,9 @@ def LSQUnivariateSpline(x, y, t, w=_NO_W, bbox=None, k=3, ext=0,
 # =====================================================================
 
 _biv_spec = [
-    ('tx', float64[:]),
-    ('ty', float64[:]),
-    ('c', float64[:]),
+    ('tx', float64[::1]),
+    ('ty', float64[::1]),
+    ('c', float64[::1]),
     ('kx', int64),
     ('ky', int64),
     ('fp', float64),
