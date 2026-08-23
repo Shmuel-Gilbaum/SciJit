@@ -802,7 +802,8 @@ def _warn_points_ignored():
 # ---------------------------------------------------------------------
 @njit
 def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
-               use_points, wcode, w0, w1, maxp1, limlst, refptr=0):
+               use_points, wcode, w0, w1, maxp1, limlst, refptr=0,
+               want_info=True):
     """Every QUADPACK route scipy's ``quad`` can reach.
 
     Returns ``(val, abserr, neval, ier, last, alist, blist, rlist, elist,
@@ -823,11 +824,29 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
     # route that does not read it, and the empty-interval shortcut below
     # is reachable at any `limit`, both as in scipy.
     nlim = limit if limit > 0 else 0
-    alist = np.full(nlim, np.nan)
-    blist = np.full(nlim, np.nan)
-    rlist = np.zeros(nlim)
-    elist = np.zeros(nlim)
-    iord = np.zeros(nlim, np.int32)
+    # CHOSEN, and pinned by tests/integrate/test_quad_scipy.py:784: the
+    # infodict tail is zeroed here, where scipy exposes uninitialised memory.
+    # Filling five limit-sized arrays is not free -- at limit=20000 it cost
+    # 13 us per call -- so it happens only when the caller asked for the
+    # infodict. `want_info` is False only where no infodict is built, and at
+    # the compiled entry point it is the full_output literal, so the branch
+    # folds away.
+    # The arrays keep their full length either way -- only the FILL is
+    # conditional. Sizing them to 0 when no infodict was asked for cored the
+    # process (free(): invalid next size), so the length is not the thing to
+    # economise on.
+    if want_info:
+        alist = np.full(nlim, np.nan)
+        blist = np.full(nlim, np.nan)
+        rlist = np.zeros(nlim)
+        elist = np.zeros(nlim)
+        iord = np.zeros(nlim, np.int32)
+    else:
+        alist = np.empty(nlim)
+        blist = np.empty(nlim)
+        rlist = np.empty(nlim)
+        elist = np.empty(nlim)
+        iord = np.empty(nlim, np.int32)
     # route-specific diagnostics: the break-point route's pts/level/ndin
     # and the oscillatory route's nnlog/chebmo, empty on every other route
     pts_out = np.zeros(0)
@@ -920,8 +939,8 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
             lenw = 2 * leniw - npts2
             liw = np.array(leniw, np.int32)
             lw = np.array(lenw, np.int32)
-            iwork = np.zeros(leniw, np.int32)
-            work = np.zeros(lenw, np.float64)
+            iwork = np.empty(leniw, np.int32)
+            work = np.empty(lenw, np.float64)
             _dqagp(funcptr, a_.ctypes.data, b_.ctypes.data, n2.ctypes.data,
                    pts.ctypes.data, ea.ctypes.data, er.ctypes.data,
                    result.ctypes.data, abserr.ctypes.data, neval.ctypes.data,
@@ -943,14 +962,19 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
         # ---- dqags: finite interval ---------------------------------
         a_ = np.array(lo, np.float64)
         b_ = np.array(hi, np.float64)
-        iwork = np.zeros(nlim, np.int32)
-        work = np.zeros(4 * nlim, np.float64)
+        iwork = np.empty(nlim, np.int32)
+        work = np.empty(4 * nlim, np.float64)
         _dqags(funcptr, a_.ctypes.data, b_.ctypes.data, ea.ctypes.data,
                er.ctypes.data, result.ctypes.data, abserr.ctypes.data,
                neval.ctypes.data, ier.ctypes.data, lim.ctypes.data,
                iwork.ctypes.data, work.ctypes.data,
                args_.ctypes.data, na.ctypes.data, last.ctypes.data)
-        for i in range(limit):
+        # ponytail: copy only the subdivisions QUADPACK actually made.
+        # `range(limit)` copied the whole workspace on every call, so
+        # quad(..., limit=20000) cost 27 us against scipy's flat 4 us for a
+        # one-subdivision integrand. Entries past `last` keep the sentinel
+        # they were allocated with, which is what "not computed" means here.
+        for i in range(min(last[0], limit)):
             alist[i] = work[i]
             blist[i] = work[limit + i]
             rlist[i] = work[2 * limit + i]
@@ -964,14 +988,19 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
                              "points.")
         bd = np.array(bound, np.float64)
         inf_ = np.array(infb, np.int32)
-        iwork = np.zeros(nlim, np.int32)
-        work = np.zeros(4 * nlim, np.float64)
+        iwork = np.empty(nlim, np.int32)
+        work = np.empty(4 * nlim, np.float64)
         _dqagi(funcptr, bd.ctypes.data, inf_.ctypes.data, ea.ctypes.data,
                er.ctypes.data, result.ctypes.data, abserr.ctypes.data,
                neval.ctypes.data, ier.ctypes.data, lim.ctypes.data,
                iwork.ctypes.data, work.ctypes.data,
                args_.ctypes.data, na.ctypes.data, last.ctypes.data)
-        for i in range(limit):
+        # ponytail: copy only the subdivisions QUADPACK actually made.
+        # `range(limit)` copied the whole workspace on every call, so
+        # quad(..., limit=20000) cost 27 us against scipy's flat 4 us for a
+        # one-subdivision integrand. Entries past `last` keep the sentinel
+        # they were allocated with, which is what "not computed" means here.
+        for i in range(min(last[0], limit)):
             alist[i] = work[i]
             blist[i] = work[limit + i]
             rlist[i] = work[2 * limit + i]
@@ -990,8 +1019,8 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
             lenw = 2 * leniw + 25 * (maxp1 if maxp1 > 0 else 0)
             liw = np.array(leniw, np.int32)
             lw = np.array(lenw, np.int32)
-            iwork = np.zeros(leniw, np.int32)
-            work = np.zeros(lenw, np.float64)
+            iwork = np.empty(leniw, np.int32)
+            work = np.empty(lenw, np.float64)
             _dqawo(funcptr, a_.ctypes.data, b_.ctypes.data, om.ctypes.data,
                    integr.ctypes.data, ea.ctypes.data, er.ctypes.data,
                    result.ctypes.data, abserr.ctypes.data, neval.ctypes.data,
@@ -999,7 +1028,12 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
                    lw.ctypes.data, iwork.ctypes.data, work.ctypes.data,
                    args_.ctypes.data, na.ctypes.data, last.ctypes.data,
                    momcom.ctypes.data)
-            for i in range(limit):
+            # ponytail: copy only the subdivisions QUADPACK actually made.
+            # `range(limit)` copied the whole workspace on every call, so
+            # quad(..., limit=20000) cost 27 us against scipy's flat 4 us for a
+            # one-subdivision integrand. Entries past `last` keep the sentinel
+            # they were allocated with, which is what "not computed" means here.
+            for i in range(min(last[0], limit)):
                 alist[i] = work[i]
                 blist[i] = work[limit + i]
                 rlist[i] = work[2 * limit + i]
@@ -1034,8 +1068,8 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
             lenw = 2 * leniw + 25 * (maxp1 if maxp1 > 0 else 0)
             liw = np.array(leniw, np.int32)
             lw = np.array(lenw, np.int32)
-            iwork = np.zeros(leniw, np.int32)
-            work = np.zeros(lenw, np.float64)
+            iwork = np.empty(leniw, np.int32)
+            work = np.empty(lenw, np.float64)
             _dqawf(fptr, a_.ctypes.data, om.ctypes.data,
                    integr.ctypes.data, ea.ctypes.data, result.ctypes.data,
                    abserr.ctypes.data, neval.ctypes.data, ier.ctypes.data,
@@ -1048,9 +1082,9 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
             # is the length scipy returns them at.
             sub_route = False
             nlst = limlst if limlst > 0 else 0
-            rlist = np.zeros(nlst)
-            elist = np.zeros(nlst)
-            iord = np.zeros(nlst, np.int32)
+            rlist = np.empty(nlst)
+            elist = np.empty(nlst)
+            iord = np.empty(nlst, np.int32)
             for i in range(nlst):
                 rlist[i] = work[i]                  # rslst
                 elist[i] = work[limlst + i]         # erlst
@@ -1066,15 +1100,20 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
         c_ = np.array(w0, np.float64)
         lenw = 4 * nlim
         lw = np.array(lenw, np.int32)
-        iwork = np.zeros(nlim, np.int32)
-        work = np.zeros(lenw, np.float64)
+        iwork = np.empty(nlim, np.int32)
+        work = np.empty(lenw, np.float64)
         _dqawc(funcptr, a_.ctypes.data, b_.ctypes.data, c_.ctypes.data,
                ea.ctypes.data, er.ctypes.data, result.ctypes.data,
                abserr.ctypes.data, neval.ctypes.data, ier.ctypes.data,
                lim.ctypes.data, lw.ctypes.data, iwork.ctypes.data,
                work.ctypes.data, args_.ctypes.data, na.ctypes.data,
                last.ctypes.data)
-        for i in range(limit):
+        # ponytail: copy only the subdivisions QUADPACK actually made.
+        # `range(limit)` copied the whole workspace on every call, so
+        # quad(..., limit=20000) cost 27 us against scipy's flat 4 us for a
+        # one-subdivision integrand. Entries past `last` keep the sentinel
+        # they were allocated with, which is what "not computed" means here.
+        for i in range(min(last[0], limit)):
             alist[i] = work[i]
             blist[i] = work[limit + i]
             rlist[i] = work[2 * limit + i]
@@ -1093,15 +1132,20 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
         be = np.array(w1, np.float64)
         lenw = 4 * nlim
         lw = np.array(lenw, np.int32)
-        iwork = np.zeros(nlim, np.int32)
-        work = np.zeros(lenw, np.float64)
+        iwork = np.empty(nlim, np.int32)
+        work = np.empty(lenw, np.float64)
         _dqaws(funcptr, a_.ctypes.data, b_.ctypes.data, al.ctypes.data,
                be.ctypes.data, integr.ctypes.data, ea.ctypes.data,
                er.ctypes.data, result.ctypes.data, abserr.ctypes.data,
                neval.ctypes.data, ier.ctypes.data, lim.ctypes.data,
                lw.ctypes.data, iwork.ctypes.data, work.ctypes.data,
                args_.ctypes.data, na.ctypes.data, last.ctypes.data)
-        for i in range(limit):
+        # ponytail: copy only the subdivisions QUADPACK actually made.
+        # `range(limit)` copied the whole workspace on every call, so
+        # quad(..., limit=20000) cost 27 us against scipy's flat 4 us for a
+        # one-subdivision integrand. Entries past `last` keep the sentinel
+        # they were allocated with, which is what "not computed" means here.
+        for i in range(min(last[0], limit)):
             alist[i] = work[i]
             blist[i] = work[limit + i]
             rlist[i] = work[2 * limit + i]
@@ -1110,8 +1154,8 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
 
     if sub_route:
         nl = last[0]
-        for i in range(limit):
-            iord[i] = iord[i] - 1 if i < nl else 0
+        for i in range(min(nl, limit)):
+            iord[i] = iord[i] - 1
 
     val = result[0]
     if flip:
@@ -1608,7 +1652,7 @@ def quad(func, a, b, args=(), full_output=0, epsabs=1.49e-8,
         # scipy wraps each in the tuple its own return was sliced from.
         return val, err, {'real': (dr,), 'imag': (di,)}
     r = _quad_core(fp, a, b, ab, epsabs, epsrel, limit, pts, usep,
-                   wcode, w0, w1, maxp1, limlst, fpr)
+                   wcode, w0, w1, maxp1, limlst, fpr, bool(full_output))
     _raise_integrand(ab, py, kinds)
     return _quad_slice(r, bool(full_output), limit, route)
 
@@ -1861,7 +1905,7 @@ def _quad_ovl(func, a, b, args=(), full_output=0, epsabs=1.49e-8,
         ab = _pack_args(args)
         r = _quad_core(addr, a, b, ab, epsabs,
                        epsrel, limit, _getp(points), use_pts, wcode,
-                       w0, w1, maxp1, limlst, ref)
+                       w0, w1, maxp1, limlst, ref, lit_fo)
         if ab[ab.size - 2] != 0.0:
             _replay(ab[ab.size - 1], ab)
             raise ValueError(_INTEGRAND_MSG)

@@ -371,7 +371,7 @@ for _, subpkg, libbase, _ in SHARED_LIBS:
     
 setup(
     name='scijit',
-    version='0.1.0',
+    version='0.1.1',
     author='Shmuel Gilbaum',
     author_email='s.gilbaum@gmail.com',
     url='https://github.com/shmuel-gilbaum/SciJit',
@@ -410,6 +410,7 @@ setup(
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3.13',
+        'Programming Language :: Python :: 3.14',
         'Programming Language :: Fortran',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS',
