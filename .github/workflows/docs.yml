@@ -1,0 +1,60 @@
+# Build the Sphinx docs and publish them to GitHub Pages.
+#
+# One-time setup by the repo owner: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". Then publishing a GitHub Release rebuilds and
+# redeploys to https://<owner>.github.io/<repo>/, alongside the wheel build in
+# wheels.yml. Use "Run workflow" (workflow_dispatch) on the Actions tab to
+# rebuild the docs between releases without cutting one.
+name: Docs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# Permissions the deploy-pages action needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; newer pushes cancel in-progress builds.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    # Deploy for a manual run or a real (non-prerelease) GitHub Release; a
+    # prerelease does not clobber the public docs. Preview one via workflow_dispatch.
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The docs import the REAL package (autodoc reads the numba dispatcher and
+      # jitclass docstrings), so the Fortran packs are compiled from source.
+      - name: Install gfortran
+        run: sudo apt-get update && sudo apt-get install -y gfortran
+
+      - name: Install scijit + docs dependencies
+        run: pip install .[docs]
+
+      # -W matches .readthedocs.yaml (fail_on_warning): a docstring/toctree
+      # warning fails the build rather than shipping a broken page.
+      - name: Build Sphinx HTML
+        run: python -m sphinx -b html -W --keep-going docs _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

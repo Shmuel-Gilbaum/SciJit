@@ -1,0 +1,101 @@
+cff-version: 1.2.0
+title: >-
+  scijit: scipy-equivalent numerical routines callable inside
+  numba @njit code
+message: >-
+  scijit wraps established Fortran numerical libraries so they can
+  be called from inside numba @njit-compiled code. If you use it,
+  please cite this package AND the upstream libraries it wraps (listed
+  under references), whose authors did the underlying numerical work.
+type: software
+authors:
+  - given-names: Shmuel
+    family-names: Gilbaum
+    affiliation: The Hebrew University of Jerusalem
+    email: shmuel.gilbaum@mail.huji.ac.il
+license: MIT
+references:
+  # --- architecture & existing numba wrappers this project builds on ---
+  - type: software
+    title: NumbaMinpack
+    authors:
+      - given-names: Nicholas
+        family-names: Wogan
+    url: "https://github.com/Nicholaswogan/NumbaMinpack"
+    notes: >-
+      Demonstrated the approach scijit is built on: calling a
+      compiled Fortran pack from inside numba @njit code via a @cfunc
+      address and a bind(c) wrapper. scijit keeps its low-level MINPACK
+      signatures (minpack_sig, hybrd, lmdif); the public fsolve/leastsq
+      follow scipy. MIT license.
+  - type: software
+    title: "odepack (thread-safe modern-Fortran ODEPACK)"
+    authors:
+      - given-names: Nicholas
+        family-names: Wogan
+    url: "https://github.com/Nicholaswogan/odepack"
+    notes: >-
+      The modern-Fortran ODEPACK edition (LSODA/LSODAR) actually
+      vendored and wrapped by scijit.integrate. Underlying ODEPACK
+      algorithm by A. C. Hindmarsh (LLNL).
+  - type: software
+    title: numbalsoda
+    authors:
+      - given-names: Nicholas
+        family-names: Wogan
+    url: "https://github.com/Nicholaswogan/numbalsoda"
+    notes: >-
+      scijit.integrate's lsoda_sig cfunc signature matches this
+      package's; scijit's odeint itself follows scipy's API.
+  # --- the numerical libraries themselves ---
+  - type: software
+    title: FITPACK
+    authors:
+      - given-names: Paul
+        family-names: Dierckx
+    notes: "Dierckx splines -> scijit.interpolate. Netlib, public domain."
+  - type: software
+    title: "MINPACK (fortran-lang modern edition)"
+    authors:
+      - name: fortran-lang / Argonne National Laboratory
+    url: "https://github.com/fortran-lang/minpack"
+    notes: "Garbow, Hillstrom & More. -> scijit.optimize. MIT + UChicago."
+  - type: software
+    title: L-BFGS-B
+    authors:
+      - given-names: Jorge
+        family-names: Nocedal
+      - name: "Zhu, Byrd, Morales; modern edition by Jacob Williams"
+    url: "https://github.com/jacobwilliams/lbfgsb"
+    notes: "-> scijit.optimize.minimize(L-BFGS-B). BSD-3."
+  - type: software
+    title: SLSQP
+    authors:
+      - given-names: Dieter
+        family-names: Kraft
+      - name: "modern edition by Jacob Williams"
+    url: "https://github.com/jacobwilliams/slsqp"
+    notes: "-> scijit.optimize (SLSQP). BSD-3."
+  - type: software
+    title: PRIMA
+    authors:
+      - given-names: Zaikun
+        family-names: Zhang
+      - name: "reference implementation of M. J. D. Powell's solvers"
+    url: "https://github.com/libprima/prima"
+    notes: "UOBYQA/NEWUOA/BOBYQA/LINCOA/COBYLA -> scijit.optimize. BSD-3."
+  - type: software
+    title: "QUADPACK (modern edition)"
+    authors:
+      - name: "Piessens, de Doncker; modern edition by Jacob Williams"
+    url: "https://github.com/jacobwilliams/quadpack"
+    notes: "-> scijit.integrate.quad. BSD-3."
+  - type: software
+    title: "LAPACK (Reference-LAPACK) + BLAS"
+    authors:
+      - name: "E. Anderson, Z. Bai, J. Dongarra et al. (LAPACK team)"
+    url: "https://github.com/Reference-LAPACK/lapack"
+    notes: >-
+      Full reference LAPACK + BLAS, vendored as the shared
+      scijit/_lib/liblapackref that backs scijit.optimize's
+      least-squares path (curve_fit, lsq_linear). BSD-3.

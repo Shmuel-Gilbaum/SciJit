@@ -1,0 +1,58 @@
+BSD 3-Clause License
+
+Copyright (c) 2026, Shmuel Gilbaum
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+
+Third-party components
+
+The BSD 3-Clause license above covers scijit's own code: the bind(c) wrappers,
+the ctypes/@njit glue, and the pure-@njit ports. scijit also bundles and builds
+several established numerical libraries, each under its own license, retained in
+src/<pack>/ and summarized in docs/CREDITS.md:
+
+  FITPACK (Dierckx, public domain)        src/fitpack/README
+  MINPACK (Argonne; MIT + U. of Chicago)  src/minpack/LICENSE.txt,
+                                          src/minpack/LICENSE_NumbaMinpack.txt
+  L-BFGS-B (BSD-3)                         src/lbfgsb/LICENSE.txt
+  SLSQP (BSD-3)                            src/slsqp/LICENSE
+  PRIMA (BSD-3)                            src/prima/LICENCE.txt
+  FFTPACK (public domain)                 src/fftpack/LICENSE
+  QUADPACK                                src/quadpack/LICENSE
+  ODEPACK / LSODA (public domain)         src/odepack/LICENSE
+  ARPACK (BSD-3)                           src/arpack/LICENSE_arpack-ng.txt
+  Reference LAPACK / BLAS (BSD-3)          src/lapack/LICENSE_lapack.txt
+  PROPACK (BSD-3)                          src/propack/LICENSE_propack.txt
+  CDFLIB (MIT)                             src/cdflib/LICENSE_cdflib.txt
+  AMOS (Sandia / ACM TOMS)                 src/amos/LICENSE_amos.txt
+
+Each bundled component remains under the license shipped alongside it.
+The FITPACK sources are public domain and carry no license file.
+src/fitpack/README records their provenance and the local
+modifications to twelve sources.

@@ -1,0 +1,37 @@
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Compiled Fortran artifacts (rebuilt by setup.py on install)
+scijit/**/*.so
+scijit/**/*.dll
+scijit/**/*.dylib
+*.mod
+*.o
+
+# IDE / editors
+.idea/
+.vscode/
+.spyproject/
+
+# OS / filesystem junk
+.fuse_hidden*
+.DS_Store
+Thumbs.db
+
+# Logs and temp
+*.log
+*.tmp
+
+# Claude Code sandbox artifact
+.mcp.json
+

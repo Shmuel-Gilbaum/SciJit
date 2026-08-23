@@ -1,0 +1,26 @@
+FITPACK (Dierckx) - provenance and redistribution
+==================================================
+
+The Fortran sources in this directory are FITPACK, a package for curve and
+surface fitting with splines by Paul Dierckx (Department of Computer Science,
+KU Leuven), distributed through netlib (https://netlib.org/dierckx/). The
+double-precision ("ddierckx") variant vendored here was generated from the
+netlib sources by Pearu Peterson.
+
+FITPACK carries no separate license text. Dierckx released it as freely
+available software through netlib, and it has long been redistributed on that
+basis; SciPy, among other projects, incorporates the same sources. It is used
+and redistributed here on those terms. FITPACK is described in:
+
+    P. Dierckx, Curve and Surface Fitting with Splines,
+    Monographs on Numerical Analysis, Oxford University Press, 1993.
+
+Local edit (2026-08-01)
+-----------------------
+
+Twelve smoothing fitters (curfit, percur, parcur, clocur, concur, regrid,
+parsur, pogrid, spgrid, sphere, surfit, polar) take `tol` and `maxit` as
+trailing arguments rather than setting them as locals, so a caller can reach
+them. Each edited file records the change and the original values in a comment
+in place of the removed assignments. No `fp*` worker signature changed, and an
+unchanged call is an unchanged computation. See README in this directory.

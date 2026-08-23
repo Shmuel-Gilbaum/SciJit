@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include CITATION.cff
+include pyproject.toml
+
+# Fortran/C sources, compile-order lists (SOURCES.txt), include headers,
+# per-pack licenses and READMEs, everything setup.py needs to build each pack.
+recursive-include src *
+recursive-exclude src *.o *.mod
+
+# documentation
+recursive-include docs *.md
+
+# prebuilt shared libraries are rebuilt at install by setup.py; a source
+# distribution ships source only, not a platform-specific binary.
+recursive-exclude scijit *.so *.dll *.dylib *.dll.a
+global-exclude __pycache__ *.pyc

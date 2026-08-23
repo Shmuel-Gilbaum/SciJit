@@ -1,0 +1,165 @@
+name: wheels
+
+# Build per-OS wheels with cibuildwheel (compiles the vendored Fortran on each
+# runner and bundles the gfortran runtime into the wheel, resolving gotcha #13),
+# then publish to PyPI via Trusted Publishing on a version tag.
+#
+# STILL NEEDS CI ITERATION (run it and fix what the runners report):
+#  - Windows: cibuildwheel must find gfortran (mingw). rtools or msys2 usually
+#    needed; setup.py already handles the Windows -static + liblapackref.dll.a
+#    linking (gotcha #13a) and scijit/__init__.py does the os.add_dll_directory
+#    walk. delvewheel bundles the DLLs.
+#  - macOS: gfortran from Homebrew; libquadmath path + install_name handled in
+#    setup.py (gotcha #13b). delocate bundles the dylibs.
+#  - Linux: manylinux image needs gfortran (CIBW_BEFORE_ALL below); auditwheel
+#    bundles libgfortran (gotcha #13c).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-14 (Sonoma), NOT macos-latest: Homebrew builds bottles per
+        # macOS version, so libquadmath's minimum target tracks the RUNNER's
+        # macOS, not the gcc version. On macos-latest delocate refused with
+        #   libquadmath.0.dylib has a minimum target of 26.0   (gcc 16.1)
+        #   libquadmath.0.dylib has a minimum target of 16.0   (gcc 13)
+        # against a wheel tagged macosx_11_0.
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Fortran compiler (macOS + Windows)
+        if: runner.os != 'Linux'
+        uses: fortran-lang/setup-fortran@v1
+        with:
+          compiler: gcc
+          version: '13'
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.2.0
+        env:
+          CIBW_BUILD: "cp310-* cp313-*"
+          CIBW_SKIP: "*-musllinux* *_i686 *-win32"
+          CIBW_ARCHS_MACOS: "arm64"
+          # cibuildwheel >= 2.22 defaults Windows repair to delvewheel,
+          # which MANGLES vendored DLL filenames. The glue loads its
+          # libraries by explicit path, and the dependency-table step
+          # below shows the Windows wheel carries no toolchain
+          # dependency, so there is nothing to bundle. Empty keeps the
+          # behaviour that step verified.
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: ""
+          # manylinux2014 (glibc 2.17) has GCC 10.2 and no cp313 numpy
+          # wheel, so pip builds numpy from source and meson refuses:
+          #   ../meson.build:25:4: ERROR: NumPy requires GCC >= 10.3
+          # 2_28 is also the floor numpy and scipy themselves ship for.
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
+          # must match the runner image above; 11.0 is unreachable while any
+          # Homebrew libquadmath is bundled.
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=14.0"
+          # manylinux: install gfortran before the Fortran packs build
+          CIBW_BEFORE_ALL_LINUX: >-
+            (command -v gfortran) ||
+            (yum install -y gcc-gfortran) ||
+            (apt-get update && apt-get install -y gfortran)
+          # smoke-test the built wheel: the 3 subpackages must import + run
+          CIBW_TEST_COMMAND: >-
+            python -c "import scijit;
+            from scijit.optimize import lsq_linear, differential_evolution;
+            from scijit.integrate import solve_ivp, quad;
+            from scijit.interpolate import CubicSpline, interp1d;
+            print('scijit', scijit.__version__, 'import + 3 subpackages OK')"
+
+      # Windows is the only leg with NO wheel-repair step (cibuildwheel 2.21
+      # has no default repair for Windows, and setup.py links -static instead).
+      # The smoke test above runs on the build machine, where gfortran is on
+      # PATH, so a surviving toolchain dependency would resolve there and stay
+      # invisible until a user without gfortran installed the wheel. Read the
+      # dependency table instead of trusting the import.
+      - name: Dependency table (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          command -v objdump >/dev/null || { echo "objdump not on PATH"; exit 1; }
+          w=$(ls wheelhouse/*.whl | head -1)
+          echo "inspecting $w"
+          python -m zipfile -e "$w" unpacked/
+          bad=0
+          for dll in $(find unpacked -name '*.dll'); do
+            echo "== $dll"
+            objdump -p "$dll" | grep "DLL Name" || true
+            if objdump -p "$dll" | grep -qiE 'libgfortran|libquadmath|libwinpthread|libgcc_s'; then
+              echo "FAIL: $dll still depends on the build toolchain"
+              bad=1
+            fi
+          done
+          exit $bad
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  # A macosx_14_0 wheel installs on every later macOS, because a macOS platform
+  # tag is a minimum floor rather than an exact match. Measured rather than
+  # assumed: this job builds nothing, it installs the macos-14 artifact on the
+  # newest runner image and imports the three subpackages.
+  verify_macos_forward_compat:
+    name: macOS forward compatibility
+    needs: build_wheels
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheels-macos-14
+          path: dist
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - shell: bash
+        run: |
+          python -m pip install dist/*.whl
+          python -c "import platform, scijit; \
+            from scijit.interpolate import CubicSpline; \
+            from scijit.optimize import lsq_linear; \
+            from scijit.integrate import quad; \
+            print('scijit', scijit.__version__, 'ok on macOS', platform.mac_ver()[0])"
+
+  build_sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build sdist
+        run: pipx run build --sdist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    name: publish to PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    # Publish only for a real (non-prerelease) GitHub Release; a manual
+    # workflow_dispatch run builds + smoke-tests the wheels without publishing.
+    if: github.event_name == 'release' && github.event.release.prerelease == false
+    environment: pypi
+    permissions:
+      id-token: write        # required for PyPI Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # For a dry run first, publish to TestPyPI:
+        # with:
+        #   repository-url: https://test.pypi.org/legacy/

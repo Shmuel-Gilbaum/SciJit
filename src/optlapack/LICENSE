@@ -1,0 +1,12 @@
+optlapack - scijit bind(c) wrappers around Reference-LAPACK
+==========================================================
+
+wrappers.f90 in this directory is part of scijit and is covered by the
+project's BSD-3-Clause license (see the top-level LICENSE file). It provides
+`bind(c)` entry points (dtrtrs_c, dgeqp3_c, dorgqr_c) for a small set of
+Reference-LAPACK routines used by scijit.optimize's least-squares path
+(curve_fit, lsq_linear).
+
+The LAPACK routines themselves are built from the shared Reference-LAPACK
+sources vendored in ../lapack/ and are covered by that library's license
+(../lapack/LICENSE_lapack.txt, Reference-LAPACK, BSD-3-Clause).
