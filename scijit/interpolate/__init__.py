@@ -10,6 +10,14 @@ compiled class. The factory exists because a compiled class cannot supply its
 own default arguments, so calling ``CubicSpline(x, y)`` without it would
 require every argument to be written out.
 
+Evaluating in a loop
+    A bivariate spline object costs 693 ns per call and 315 ns per point when
+    the query points arrive together, measured on a 200x500 table. Where a
+    loop cannot batch, ``bispeu`` and ``bispev`` take the knot and coefficient
+    arrays directly at 498 ns, and those arrays have to be bound to locals
+    above the loop. Full measurement in docs/usage/interpolate.md, under
+    "Evaluation cost per call".
+
 scipy names, backed by FITPACK
     splrep, splprep, splev, splint, sproot, spalde, bisplev
     UnivariateSpline, InterpolatedUnivariateSpline, LSQUnivariateSpline,

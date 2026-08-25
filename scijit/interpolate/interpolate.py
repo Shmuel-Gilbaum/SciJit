@@ -488,6 +488,17 @@ def _pt1d_ovl(v):
     ``np.asarray`` of a numba scalar is a 0-d array whose ``ravel`` numba
     does not type, so the scalar arm fills a length-1 buffer instead.
     """
+    if (isinstance(v, types.Array) and v.ndim == 1 and v.layout == 'C'
+            and v.dtype == types.float64):
+        # ponytail: already what the general arm below would build. numpy's
+        # asarray, ascontiguousarray and ravel are all no-copy views on a 1-D
+        # contiguous float64 array, so the buffer was shared with the caller
+        # either way. `.ravel()` still costs 37 ns per call there, and the
+        # bivariate `.ev` pays it twice.
+        def impl(v):
+            return v
+        return impl
+
     if isinstance(v, (types.Array, types.List, types.ListType,
                       types.BaseTuple)):
         def impl(v):
@@ -4350,8 +4361,9 @@ class _RectBivariateSpline:
         -------
         float
             The spline value, as a SCALAR. scipy's ``spl.ev(0.5, 0.5)``
-            returns a length-1 array for the same query. Allocates two
-            length-1 arrays per call, so prefer `ev` on a batch in a hot
+            returns a length-1 array for the same query. One call per point
+            costs 693 ns against 315 ns per point for `ev` on a batch,
+            measured on a 200x500 table, so prefer `ev` on a batch in a hot
             loop.
         """
         xa = np.empty(1, np.float64)

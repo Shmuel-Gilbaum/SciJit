@@ -32,6 +32,13 @@ callback, shown under "A spline inside a solver callback" below. The first call
 to a compiled function pays numba's one-time compile cost; later calls run the
 machine code.
 
+Query points batch the same way, and for the same reason. A bivariate spline
+object costs 693 ns per call and 315 ns per point when the points arrive
+together, measured on a 200x500 table. Passing the whole array of query points
+to one call is both the shorter spelling and the faster one.
+[Evaluation cost per call](#evaluation-cost-per-call) has the measurement and
+the case where a loop cannot batch.
+
 ## 1-D interpolation: `interp1d`
 
 `interp1d` builds a callable interpolant from `(x, y)` samples. It is a jitclass
@@ -784,6 +791,70 @@ In practice the arrays come from a fit, or from a `RectBivariateSpline`
 instance's `.tx`, `.ty` and `.c` attributes, rather than being written by hand.
 When written by hand, the coefficient layout is FITPACK's flat form
 `c[(ny-ky-1)*i + j]`, equal to `np.outer(cx, cy).ravel()`.
+
+### Evaluation cost per call
+
+A spline object holds its knots and coefficients as fields of a numba
+jitclass. Reading those fields costs something, and the cost falls once per
+call rather than once per point. Measured on a 200x500 table with the calling
+loop compiled:
+
+```
+spl.ev(a, b)                       one point per call     693 ns
+bispeu(a, b, tx, ty, c, kx, ky)    one point per call     498 ns
+spl.ev(qx, qy)                     100000 points at once  315 ns per point
+```
+
+A batch call is the first answer. A loop that must evaluate one point at a
+time is the case where `bispeu` is worth reaching for, and the knot and
+coefficient arrays have to be bound to locals ABOVE the loop. numba does not
+lift a jitclass field read out of a loop, so `spl.tx` written inside the loop
+is re-read on every iteration and costs more than the object call it replaced.
+
+```python
+import numpy as np
+from numba import njit
+from scijit.interpolate import RectBivariateSpline, bispeu
+
+x = np.linspace(0.0, 4.0, 40)
+y = np.linspace(0.0, 3.0, 30)
+z = np.sin(x[:, None]) * np.cos(y[None, :])
+spl = RectBivariateSpline(x, y, z, None, 3, 3, 0.0, 20)
+
+qx = np.linspace(0.5, 3.5, 200)
+qy = np.linspace(0.5, 2.5, 200)
+
+@njit
+def batched(spl, qx, qy):
+    return spl.ev(qx, qy).sum()
+
+@njit
+def one_at_a_time(spl, qx, qy):
+    tx, ty, c, kx, ky = spl.tx, spl.ty, spl.c, spl.kx, spl.ky   # bound once
+    a = np.empty(1, np.float64)
+    b = np.empty(1, np.float64)
+    s = 0.0
+    for i in range(qx.size):
+        a[0] = qx[i]
+        b[0] = qy[i]
+        s += bispeu(a, b, tx, ty, c, kx, ky)[0]
+    return s
+
+print(batched(spl, qx, qy))
+print(one_at_a_time(spl, qx, qy))
+```
+
+```
+37.73576110810349
+37.73576110810349
+```
+
+Applies to `RectBivariateSpline`, `SmoothBivariateSpline`,
+`RectSphereBivariateSpline` and `SmoothSphereBivariateSpline`, through
+`bispeu` for scattered points and `bispev` for a grid. The univariate classes
+have no such gap: `UnivariateSpline.ev` measures 378 ns against 350 ns for
+`splev` on the same spline, so the object is the right spelling there in every
+case.
 
 ## Flag arguments: scipy's spelling
 

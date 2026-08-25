@@ -934,6 +934,16 @@ def parder(x, y, tx, ty, c, kx, ky, nux, nuy):
         raise ValueError("0 <= nux < kx must hold")
     if nuy < 0 or nuy >= ky:
         raise ValueError("0 <= nuy < ky must hold")
+    # ponytail: parder rebuilds the derivative coefficients over a len(c)
+    # workspace on every call, exactly as pardeu does below. bispev is the
+    # no-derivative grid evaluator and agrees exactly. See pardeu for the
+    # crossover measurement behind the 1/256.
+    #
+    # The guard sits above the int32 boxes because bispev builds its own and
+    # uses none of these, so on the fast path all eight are dead allocations.
+    if nux == 0 and nuy == 0 and (len(x_) * len(y_) * 256
+                                  <= (len(tx_) - kx - 1) * (len(ty_) - ky - 1)):
+        return bispev(x_, y_, tx_, ty_, c_, kx, ky)
     nx = np.array(len(tx_), np.int32)
     ny = np.array(len(ty_), np.int32)
     mx = np.array(len(x_), np.int32)
@@ -942,13 +952,6 @@ def parder(x, y, tx, ty, c, kx, ky, nux, nuy):
     ky_ = np.array(ky, np.int32)
     nux_ = np.array(nux, np.int32)
     nuy_ = np.array(nuy, np.int32)
-    # ponytail: parder rebuilds the derivative coefficients over a len(c)
-    # workspace on every call, exactly as pardeu does below. bispev is the
-    # no-derivative grid evaluator and agrees exactly. See pardeu for the
-    # crossover measurement behind the 1/256.
-    if nux == 0 and nuy == 0 and (len(x_) * len(y_) * 256
-                                  <= (len(tx_) - kx - 1) * (len(ty_) - ky - 1)):
-        return bispev(x_, y_, tx_, ty_, c_, kx, ky)
     lw = len(x_) * (kx + 1 - nux) + len(y_) * (ky + 1 - nuy) \
         + (len(tx_) - kx - 1) * (len(ty_) - ky - 1)
     kw = len(x_) + len(y_)
@@ -1027,13 +1030,6 @@ def pardeu(x, y, tx, ty, c, kx, ky, nux, nuy):
         raise ValueError("0 <= nux < kx must hold")
     if nuy < 0 or nuy >= ky:
         raise ValueError("0 <= nuy < ky must hold")
-    nx = np.array(len(tx_), np.int32)
-    ny = np.array(len(ty_), np.int32)
-    m = np.array(len(x_), np.int32)
-    kx_ = np.array(kx, np.int32)
-    ky_ = np.array(ky, np.int32)
-    nux_ = np.array(nux, np.int32)
-    nuy_ = np.array(nuy, np.int32)
     nc = (len(tx_) - kx - 1) * (len(ty_) - ky - 1)
     # ponytail: FITPACK's pardeu rebuilds the derivative coefficients over a
     # workspace of len(c) on EVERY call, so one point against a 200x500 table
@@ -1044,6 +1040,13 @@ def pardeu(x, y, tx, ty, c, kx, ky, nux, nuy):
     # round number; raise it if a batch profile asks for it.
     if nux == 0 and nuy == 0 and len(x_) * 256 <= nc:
         return bispeu(x_, y_, tx_, ty_, c_, kx, ky)
+    nx = np.array(len(tx_), np.int32)
+    ny = np.array(len(ty_), np.int32)
+    m = np.array(len(x_), np.int32)
+    kx_ = np.array(kx, np.int32)
+    ky_ = np.array(ky, np.int32)
+    nux_ = np.array(nux, np.int32)
+    nuy_ = np.array(nuy, np.int32)
     lw = nc + (kx + 1 - nux) * len(x_) + (ky + 1 - nuy) * len(x_)
     kw = 2 * len(x_)
     lwrk = np.array(lw, np.int32)
