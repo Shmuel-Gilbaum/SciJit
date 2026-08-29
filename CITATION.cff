@@ -26,7 +26,7 @@ references:
       Demonstrated the approach scijit is built on: calling a
       compiled Fortran pack from inside numba @njit code via a @cfunc
       address and a bind(c) wrapper. scijit keeps its low-level MINPACK
-      signatures (minpack_sig, hybrd, lmdif); the public fsolve/leastsq
+      approach; scijit's fsolve and leastsq build the cfunc themselves and
       follow scipy. MIT license.
   - type: software
     title: "odepack (thread-safe modern-Fortran ODEPACK)"
@@ -45,8 +45,8 @@ references:
         family-names: Wogan
     url: "https://github.com/Nicholaswogan/numbalsoda"
     notes: >-
-      scijit.integrate's lsoda_sig cfunc signature matches this
-      package's; scijit's odeint itself follows scipy's API.
+      The same approach applied to LSODA; scijit's odeint follows
+      scipy's API.
   # --- the numerical libraries themselves ---
   - type: software
     title: FITPACK

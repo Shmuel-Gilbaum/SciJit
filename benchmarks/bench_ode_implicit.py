@@ -9,9 +9,10 @@ variables z(y), then form dy/dt from z.
 Nesting depth per ODE:  adaptive steps  x  RHS evals/step  x  Newton
 iterations  x  residual evals. Times an ENSEMBLE of independent ODEs.
 
-scijit runs the whole ensemble in ONE @njit driver: the LSODA
-integrator's RHS is a @cfunc that itself calls `fsolve` (MINPACK), all
-compiled, no Python boundary anywhere in the nest. scipy does the
+scijit runs the whole ensemble in ONE @njit driver: the right-hand side is
+a plain @njit function that itself calls `fsolve` (MINPACK), and `odeint`
+and `fsolve` each build their own callback internally, so the nest is
+compiled end to end with no Python boundary anywhere in it. scipy does the
 identical thing with a Python RHS calling `scipy.optimize.fsolve`, the
 classic pattern that makes stiff DAE-style integration crawl in Python.
 
@@ -20,13 +21,13 @@ Run:  PYTHONPATH=. python benchmarks/bench_ode_implicit.py
 import math
 import time
 import numpy as np
-from numba import njit, cfunc, carray
+from numba import njit
 
 import scipy.integrate
 import scipy.optimize
 
-from scijit.integrate import odeint, lsoda_sig
-from scijit.optimize import fsolve, minpack_sig
+from scijit.integrate import odeint
+from scijit.optimize import fsolve
 
 D = 2             # ODE state dimension
 Z = 3             # inner algebraic system dimension
@@ -50,20 +51,14 @@ def inner_py(z, y):
             z[2] - 1.0 - 0.05 * z[0]]
 
 
-@cfunc(minpack_sig)
-def inner_c(z_ptr, f_ptr, args_ptr):
-    z = carray(z_ptr, Z)
-    f = carray(f_ptr, Z)
-    y = carray(args_ptr, D)
+@njit
+def inner_nb(z, y):
     acc = 0.0
     for k in range(1, KFREQ + 1):
         acc += math.sin(k * z[0]) / (k * k)
-    f[0] = z[0] - 1.0 - 0.1 * math.sin(y[0]) - 0.05 * z[1] - 0.02 * acc
-    f[1] = z[1] - 1.0 - 0.1 * math.sin(y[1]) - 0.05 * z[2]
-    f[2] = z[2] - 1.0 - 0.05 * z[0]
-
-
-_INNER = inner_c.address
+    return np.array([z[0] - 1.0 - 0.1 * math.sin(y[0]) - 0.05 * z[1] - 0.02 * acc,
+                     z[1] - 1.0 - 0.1 * math.sin(y[1]) - 0.05 * z[2],
+                     z[2] - 1.0 - 0.05 * z[0]])
 
 
 # ---- ODE right-hand side  dy/dt = g(y, z(y)) --------------------------
@@ -73,30 +68,24 @@ def rhs_py(y, t):
             -0.10 * z[1] * y[1] + 0.05 * z[2]]
 
 
-@cfunc(lsoda_sig)
-def rhs_c(t, y_ptr, yd_ptr, args_ptr):
-    y = carray(y_ptr, D)
-    yd = carray(yd_ptr, D)
+@njit
+def rhs_nb(y, t):
     z0 = np.array([1.0, 1.0, 1.0])
     yv = np.array([y[0], y[1]])                  # state -> fsolve args
-    # scipy-shaped `fsolve` returns x directly (the legacy 4-tuple entry
-    # was deleted 2026-07-27); a raw .address is still accepted.
-    z = fsolve(_INNER, z0, args=yv)              # inner nonlinear solve
-    yd[0] = -0.10 * z[0] * y[0]
-    yd[1] = -0.10 * z[1] * y[1] + 0.05 * z[2]
-
-
-_RHS = rhs_c.address
+    z = fsolve(inner_nb, z0, (yv,))              # inner nonlinear solve
+    dy = np.empty(D)
+    dy[0] = -0.10 * z[0] * y[0]
+    dy[1] = -0.10 * z[1] * y[1] + 0.05 * z[2]
+    return dy
 
 
 # ---- drivers ----------------------------------------------------------
-@njit(cache=False)
+@njit
 def run_numba(y0all, t_eval):
     total = 0.0
-    args = np.zeros(1)
     for e in range(y0all.shape[0]):
         y0 = y0all[e].copy()
-        usol, ok = odeint(_RHS, y0, t_eval, args)
+        usol = odeint(rhs_nb, y0, t_eval, ())
         total += usol[-1, 0] + usol[-1, 1]
     return total
 

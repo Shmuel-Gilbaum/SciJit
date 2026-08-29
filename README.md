@@ -4,12 +4,12 @@
 
 A scipy-equivalent library callable from inside numba `@njit` code. scijit
 either wraps the same Fortran packs scipy wraps, or re-implements scipy's
-pure-Python routines as `@njit`. Results match scipy, verified against it in
-the test suite. Where a routine differs from scipy, its Notes say so; an
-argument it does not implement raises rather than silently returning something
-else. It pays off most when the same routine runs many times inside a
-compiled loop, where scipy would pay Python's per-call overhead on every
-iteration. Same namespaces, same names, same grouping. Not every scipy
+pure-Python routines as `@njit`. Results match scipy, checked routine by
+routine against it during development. Where a routine differs from scipy, its
+Notes say so; an argument it does not implement raises rather than silently
+returning something else. It pays off most when the same routine runs many
+times inside a compiled loop, where scipy would pay Python's per-call overhead
+on every iteration. Same namespaces, same names, same grouping. Not every scipy
 subpackage is mirrored; see [docs/roadmap.md](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/docs/roadmap.md) for the gaps.
 
 scijit is not affiliated with, or endorsed by, the NumPy, SciPy or Numba
@@ -36,7 +36,7 @@ and the `scipy.special` subset numba-scipy covers.
 
 scijit was written mostly with Anthropic's Claude (via Claude Code) under my
 direction. I set the architecture and the design choices, and every routine is
-verified against SciPy in the test suite.
+verified against SciPy during development.
 
 ## Subpackages
 
@@ -98,8 +98,8 @@ on every iteration. Reproduce with `python benchmarks/<name>.py`:
 
 | benchmark | workload | speedup |
 |---|---|---|
-| [`bench_pde_front.py`](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/benchmarks/bench_pde_front.py) | 1-D Burgers front (MOL + LSODA), a 2-var `fsolve` per gridpoint per adaptive step | **20-30x** |
-| [`bench_ode_implicit.py`](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/benchmarks/bench_ode_implicit.py) | 400 stiff ODEs, a 3-var `fsolve` inside every LSODA step | **15-25x** |
+| [`bench_pde_front.py`](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/benchmarks/bench_pde_front.py) | 1-D Burgers front (MOL + LSODA), a 2-var `fsolve` per gridpoint per adaptive step | **9-19x** |
+| [`bench_ode_implicit.py`](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/benchmarks/bench_ode_implicit.py) | 400 stiff ODEs, a 3-var `fsolve` inside every LSODA step | **14-22x** |
 | [`speed_grid.py`](https://github.com/Shmuel-Gilbaum/SciJit/blob/main/benchmarks/speed_grid.py) | 18000-cell grid: root solve + opacity spline + `simpson` | **10-20x** |
 
 Speedups are approximate and vary with machine, problem size and thread count.

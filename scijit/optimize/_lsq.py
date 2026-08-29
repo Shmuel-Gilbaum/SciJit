@@ -28,7 +28,7 @@ import llvmlite.ir as ir
 
 from ._lapack import qr_pivot as _qr_pivot
 from ._lapack import solve_triangular as _solve_triangular
-from ._lbfgsb import _is_none                # noqa: E402
+from .._lib._typing import _is_none
 from ._minpack import (leastsq, minpack_sig,  # noqa: F401
                        LsqInfo, _lit_bool, _leastsq_ptr, _address_msg,
                        _check_arity, _opt_result)

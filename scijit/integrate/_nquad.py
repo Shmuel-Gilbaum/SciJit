@@ -61,6 +61,7 @@ from ._quadpack import (W_NONE, _COMPLEX_REAL_MSG, _K_BOOL, _K_FLOAT,
                         _K_INT, _arg_kinds, _arg_kinds_ty, _integrand_sig,
                         _pack_args, _quad_core, _warn_ier, _weight_code,
                         _quadpack_sig)
+from .._lib._typing import _is_none, _lit_bool
 
 # fixed head
 _NU, _TOT, _NEVAL, _AERR = 0, 1, 2, 3
@@ -890,12 +891,6 @@ def _nq_args_types(args, who):
         raise TypingError(_ARGS_ITER_MSG % who)
     # An OMITTED default reaches a chooser as the RAW PYTHON VALUE.
     return tuple(typeof(v) for v in _nq_args_tuple(args, who))
-
-
-from .._lib._typing import _is_none    # noqa: E402
-
-
-from .._lib._typing import _lit_bool    # noqa: E402
 
 
 # ---------------------------------------------------------------------

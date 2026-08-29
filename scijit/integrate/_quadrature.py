@@ -37,15 +37,7 @@ import numpy as np
 from numba import njit, objmode, types
 from numba.core.errors import TypingError
 from numba.extending import overload
-
-
-# ---------------------------------------------------------------------
-# compile-time predicates, shared by the choosers below
-# ---------------------------------------------------------------------
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
+from .._lib._typing import _is_none, _lit_bool
 
 
 # ---------------------------------------------------------------------

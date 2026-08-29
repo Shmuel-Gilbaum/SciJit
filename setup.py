@@ -32,19 +32,11 @@ import subprocess
 import tempfile
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
-from setuptools.dist import Distribution
 
 TOP_PACKAGE = 'scijit'
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
-# Tell setuptools that this package contains native compiled shared libraries
-class BinaryDistribution(Distribution):
-    def has_ext_modules(foo):
-        return True
-        
-        
-    
 # (fortran pack dir under src/, python subpackage, library base name)
 PACKS = [
     ('fitpack', 'interpolate', 'libfitpack'),
@@ -310,36 +302,34 @@ class BuildFortran(build_py):
                 os.remove(f)
             os.rmdir(moddir)
 
-        for mod in glob.glob(os.path.join(ROOT, '*.mod')):
-            os.remove(mod)
-
         super().run()
         
   
         
 
 # Tag wheel as 'py3-none-<platform>' so it works across all Python 3.x versions
-try:
-    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
-    class bdist_wheel(_bdist_wheel):
-        def finalize_options(self):
-            super().finalize_options()
-            self.root_is_pure = False
-        def get_tag(self):
-            python, abi, plat = super().get_tag()
-            # macOS: setuptools reports the tag of the PYTHON BUILD, and the
-            # python.org installer is universal2 -> we would claim a fat
-            # wheel. gfortran only ever emits the HOST architecture, so the
-            # libraries inside are single-arch and the claim is false:
-            #   delocate.libsana.DelocationError: Failed to find any binary
-            #   with the required architecture: 'x86_64'
-            # Narrow the tag to the arch we actually built.
-            if plat.startswith('macosx') and 'universal2' in plat:
-                plat = plat.replace('universal2', platform.machine())
-            return 'py3', 'none', plat
-    custom_cmdclass = {'build_py': BuildFortran, 'bdist_wheel': bdist_wheel}
-except ImportError:
-    custom_cmdclass = {'build_py': BuildFortran}
+from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
+
+
+class bdist_wheel(_bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False
+    def get_tag(self):
+        python, abi, plat = super().get_tag()
+        # macOS: setuptools reports the tag of the PYTHON BUILD, and the
+        # python.org installer is universal2 -> we would claim a fat
+        # wheel. gfortran only ever emits the HOST architecture, so the
+        # libraries inside are single-arch and the claim is false:
+        #   delocate.libsana.DelocationError: Failed to find any binary
+        #   with the required architecture: 'x86_64'
+        # Narrow the tag to the arch we actually built.
+        if plat.startswith('macosx') and 'universal2' in plat:
+            plat = plat.replace('universal2', platform.machine())
+        return 'py3', 'none', plat
+
+
+custom_cmdclass = {'build_py': BuildFortran, 'bdist_wheel': bdist_wheel}
 
 # several packs may share one subpackage (optimize = minpack + lbfgsb +
 # slsqp), dedupe packages and AGGREGATE package_data per subpackage (a
@@ -431,11 +421,6 @@ setup(
     ],
     packages=_packages,
     package_data=_package_data,
-    # scipy is not imported at runtime; it is pinned because the test suites
-    # assert parity against it and 1.18 changed behaviour that 1.15 fixed in
-    # place: SLSQP moved to a C backend and stopped deducting 1 from maxiter,
-    # COBYLA moved to bundled PRIMA, nnls dropped `atol` and made `maxiter`
-    # keyword-only, fmin's `retall` list lost an element.
     # numba floor, in order of what actually forces it:
     #   numpy 2.4 needs numba >= 0.64   (0.61 tops out at numpy 2.1)
     #   the package is measured on 0.66
@@ -444,15 +429,12 @@ setup(
     # Dropping to 0.64 costs only that one example. Dropping to 0.61 would
     # also require pinning numpy <= 2.1.
     install_requires=['numpy', 'numba>=0.66', 'scijitclass>=0.1.7'],
-    extras_require={'test': ['scipy>=1.18'],
-                    'docs': ['sphinx', 'myst-parser', 'numpydoc', 'furo']},
+    extras_require={'docs': ['sphinx', 'myst-parser', 'numpydoc', 'furo']},
     # >=3.10 because every dependency requires it: numba >= 0.61
     # dropped 3.9, current numpy requires 3.10, and scijitclass
     # declares requires-python >=3.10. A 3.9 install fails while
     # resolving a dependency, which names the dependency and not
     # scijit. It is also the floor CI builds and tests: cp310.
     python_requires='>=3.10',
-    cmdclass=custom_cmdclass, 
-    distclass=BinaryDistribution, # insures correct distro
-    zip_safe=False,                    # the shared libraries must be real files
+    cmdclass=custom_cmdclass,
 )

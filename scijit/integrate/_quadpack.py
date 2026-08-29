@@ -6,6 +6,7 @@ import numpy as np
 from numba import carray, cfunc, njit, objmode, typeof, types
 from numba.core.errors import TypingError
 from numba.extending import overload
+from .._lib._typing import _is_none, _lit_bool, _lit_str
 
 # the internal integrand signature (RETURNS the value). PRIVATE: no public
 # routine accepts a @cfunc built against it.
@@ -1188,15 +1189,6 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
 # ---------------------------------------------------------------------
 # compile-time predicates and argument resolution
 # ---------------------------------------------------------------------
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _lit_str    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
-
-
 def _weight_code(weight):
     """scipy's `weight` string, as an internal routing code.
 

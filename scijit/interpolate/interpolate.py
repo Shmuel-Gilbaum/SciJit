@@ -116,6 +116,7 @@ from scijitclass import scijitclass, all_scalar, Scalar
 
 from . import evaluators as _ev
 from . import fitters as _ft
+from .._lib._typing import _is_none, _lit_bool as _lit_bool_base
 
 
 # ---------------------------------------------------------------------
@@ -165,9 +166,6 @@ def _warn_fit(msg, k, n, m, fp, s):
 # the plain type is checked FIRST.
 # ---------------------------------------------------------------------
 
-from .._lib._typing import _lit_bool as _lit_bool_base    # noqa: E402
-
-
 def _lit_bool(v):
     """A numba type for a flag, reduced to a Python bool at compile time.
 
@@ -208,9 +206,6 @@ def _lit_flag(v, name, where):
             "compiles. From Python any object is read by its truthiness, as "
             "in scipy." % (where, name, v))
     return b
-
-
-from .._lib._typing import _is_none    # noqa: E402
 
 
 _NO_T = np.empty(0, dtype=np.float64)

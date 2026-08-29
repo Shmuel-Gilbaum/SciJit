@@ -579,8 +579,8 @@ across 10 threads finished 8.71x faster than running them one after another.
 Giving each thread its own storage costs between 4.6% and 9.7% on a
 single-threaded call, paid whether or not threads are used.
 
-Not every routine in the package is thread-safe. Each docstring says which, and
-a routine that is not says so explicitly.
+Every routine in the three subpackages is safe to call from parallel code, so
+a `prange` loop over independent problems needs nothing from the caller.
 
 ## 8. jitclasses
 

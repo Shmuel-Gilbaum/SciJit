@@ -133,6 +133,7 @@ from numba.core.errors import TypingError
 from numba.extending import overload
 
 from ._minpack import OptimizeResult, _opt_result
+from .._lib._typing import _is_none as _is_none_ty
 
 # scipy.optimize._zeros_py defaults
 _EPS = 2.220446049250313e-16          # np.finfo(float).eps
@@ -1124,9 +1125,6 @@ def _brack_args_ovl(brack):
         "brack must be None, a 2-tuple, a 3-tuple or an array of length 2 "
         "or 3. A python list is not typeable as an argument to compiled "
         "code; use a tuple.")
-
-
-from .._lib._typing import _is_none as _is_none_ty   # noqa: E402
 
 
 def _lit_fo(name, full_output):

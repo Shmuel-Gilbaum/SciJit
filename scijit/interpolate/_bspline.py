@@ -121,6 +121,7 @@ from . import _ndaxis as _nda
 from ._ndaxis import (_ND_RANKS, _check_axis, _coeff_body, _define,
                       _dispatch_branches, _rank_phrase,
                       _shape_words)
+from .._lib._typing import _is_none
 
 
 # ---------------------------------------------------------------------------
@@ -481,18 +482,6 @@ def _bspl_arm(ty, core):
     return njit(impl)
 
 
-def _tck_absent(v):
-    """Was this optional argument omitted, or passed as ``None``?
-
-    `v` is a plain Python value on the interpreter path and a numba type
-    inside an ``@overload`` body, so all three spellings are tested. Same
-    shape as ``interpolate._lit_bool``, which reads a literal flag the same
-    way. Internal.
-    """
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
-
-
 #: What a `c` holding one coefficient array per dimension is refused with.
 #: `splprep` produces exactly that layout, so this is the message a caller who
 #: feeds a parametric fit straight into `splder` reads.
@@ -743,10 +732,10 @@ def _splder_ovl(t, c=None, k=None, n=1):
     the call site.
     """
     if _is_bspl_ty(t):
-        if not _tck_absent(k):
+        if not _is_none(k):
             return None             # spline object plus c and k
         arm = _bspl_arm(t, _splder_any)
-        if _tck_absent(c):
+        if _is_none(c):
             def impl(t, c=None, k=None, n=1):
                 return arm(t, n)
             return impl
@@ -756,7 +745,7 @@ def _splder_ovl(t, c=None, k=None, n=1):
         return impl
 
     if isinstance(t, types.BaseTuple):
-        if not _tck_absent(k):
+        if not _is_none(k):
             return None             # tck plus c and k -> TypingError
         arm = _c_arm(_param_c_of_tck(t))
         if arm:
@@ -764,7 +753,7 @@ def _splder_ovl(t, c=None, k=None, n=1):
                 _bad_c_raise(False, arm)
                 return (np.empty(0, np.float64), np.empty(0, np.float64), 0)
             return impl
-        if _tck_absent(c):
+        if _is_none(c):
             def impl(t, c=None, k=None, n=1):
                 tt, cc, kk = t
                 return _splder_any(tt, cc, kk, n)
@@ -775,7 +764,7 @@ def _splder_ovl(t, c=None, k=None, n=1):
             return _splder_any(tt, cc, kk, c)
         return impl
 
-    if _tck_absent(c) or _tck_absent(k):
+    if _is_none(c) or _is_none(k):
         return None                 # t without c or k -> TypingError
 
     arm = _c_arm(c)
@@ -968,10 +957,10 @@ def _splantider_ovl(t, c=None, k=None, n=1):
     `_splder_ovl`'s mechanism, over `_splantider_core`.
     """
     if _is_bspl_ty(t):
-        if not _tck_absent(k):
+        if not _is_none(k):
             return None             # spline object plus c and k
         arm = _bspl_arm(t, _splantider_any)
-        if _tck_absent(c):
+        if _is_none(c):
             def impl(t, c=None, k=None, n=1):
                 return arm(t, n)
             return impl
@@ -981,7 +970,7 @@ def _splantider_ovl(t, c=None, k=None, n=1):
         return impl
 
     if isinstance(t, types.BaseTuple):
-        if not _tck_absent(k):
+        if not _is_none(k):
             return None             # tck plus c and k -> TypingError
         arm = _c_arm(_param_c_of_tck(t))
         if arm:
@@ -989,7 +978,7 @@ def _splantider_ovl(t, c=None, k=None, n=1):
                 _bad_c_raise(True, arm)
                 return (np.empty(0, np.float64), np.empty(0, np.float64), 0)
             return impl
-        if _tck_absent(c):
+        if _is_none(c):
             def impl(t, c=None, k=None, n=1):
                 tt, cc, kk = t
                 return _splantider_any(tt, cc, kk, n)
@@ -1000,7 +989,7 @@ def _splantider_ovl(t, c=None, k=None, n=1):
             return _splantider_any(tt, cc, kk, c)
         return impl
 
-    if _tck_absent(c) or _tck_absent(k):
+    if _is_none(c) or _is_none(k):
         return None                 # t without c or k -> TypingError
 
     arm = _c_arm(c)

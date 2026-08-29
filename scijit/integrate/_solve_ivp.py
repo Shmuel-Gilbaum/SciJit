@@ -25,6 +25,7 @@ from ._odeint_scipy import (_adapter_rhs, _prepend_neq, _msg, _run_odeint,
                             _check_jac_shape_band)
 from ._events import (scan_events, split_events, truncate_at,
                       KIND_RK, KIND_LSODA)
+from .._lib._typing import _is_none, _lit_bool, _lit_str
 
 __all__ = ['solve_ivp', 'OdeResult', 'OdeResultDense', 'OdeSolution',
            'METHOD_LSODA']
@@ -648,15 +649,6 @@ def LsodaSolution(t, h, yh):
 # ---------------------------------------------------------------------------
 # compile-time helpers
 # ---------------------------------------------------------------------------
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _lit_str    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
-
-
 def _passed(v):
     """True when the caller WROTE this argument, whatever value it holds.
 

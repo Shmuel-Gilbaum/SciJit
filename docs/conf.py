@@ -1,7 +1,7 @@
 # Sphinx configuration for the scijit documentation site.
 #
 # Build locally:
-#     PYTHONPATH=<repo>/SciJIT_git python -m sphinx -b html -W --keep-going docs _build
+#     PYTHONPATH=<repo> python -m sphinx -b html -W --keep-going docs _build
 #
 # Hosted on Read the Docs via ../.readthedocs.yaml.
 
@@ -17,9 +17,9 @@ project = "SciJIT"
 author = "Shmuel Gilbaum"
 copyright = "2026, Shmuel Gilbaum"
 
-# The dev tree is 0.24.0; the PUBLIC release is 0.1.0. The projection to the
-# public tree patches this to 0.1.0. Keep it in one place so the projection
-# script only rewrites this line.
+# The dev tree and the public release carry different versions. The
+# projection rewrites the `release` line below; keep it on one line so
+# that stays simple.
 release = "0.1.3"
 version = ".".join(release.split(".")[:2])
 
@@ -53,24 +53,8 @@ autodoc_default_options = {
 }
 autodoc_typehints = "none"
 
-# The package imports in ~1 s here because the compiled .so ships in the tree,
-# so a REAL import is used and jitclass/dispatcher docstrings are introspected.
-#
-# On a machine without the built libraries (a bare RTD image without gfortran),
-# uncomment the mock list below and drop `build.apt_packages: [gfortran]` from
-# .readthedocs.yaml. Mocking loses jitclass signature introspection, so the
-# real-build path is preferred.
-#
-# autodoc_mock_imports = [
-#     "scijit.interpolate.libfitpack",
-#     "scijit.integrate.libquadpack",
-#     "scijit.integrate.libodepack",
-#     "scijit.optimize.libminpack",
-#     "scijit.optimize.liblbfgsb",
-#     "scijit.optimize.libslsqp",
-#     "scijit.optimize.libprima",
-#     "scijit.optimize.liboptlapack",
-# ]
+# autodoc does a REAL import, so the jitclass and dispatcher docstrings are
+# introspected. .readthedocs.yaml installs gfortran and builds the libraries.
 
 # -- MyST / source --------------------------------------------------------------
 
@@ -81,27 +65,7 @@ source_suffix = {
 
 root_doc = "index"
 
-# Dev-only pages that the public site does not ship: the whole-package maps
-# (API_MAP, MODULES) and the usage guides for subpackages outside the released
-# three (interpolate, integrate, optimize). They are EXCLUDEd by the public
-# projection; excluding them here keeps the build's toctree complete.
-exclude_patterns = [
-    "_build",
-    "build.md",
-    "API_MAP.md",
-    "MODULES.md",
-    "usage/cluster.md",
-    "usage/constants.md",
-    "usage/csgraph.md",
-    "usage/fft.md",
-    "usage/linalg.md",
-    "usage/ndimage.md",
-    "usage/signal.md",
-    "usage/sparse_linalg.md",
-    "usage/spatial.md",
-    "usage/special.md",
-    "usage/stats.md",
-]
+exclude_patterns = ["_build"]
 
 myst_enable_extensions = [
     "colon_fence",   # ::: fenced directives

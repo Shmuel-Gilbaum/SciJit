@@ -36,6 +36,7 @@ from numba.extending import overload
 
 from ._odepack import _lsoda_sig
 from .._probe import wrote_ydot as _wrote_ydot_t
+from .._lib._typing import _is_none, _lit_bool
 
 __all__ = ['odeint', 'InfoDict', 'ODEintWarning', 'ODEpackError']
 
@@ -1439,12 +1440,6 @@ def _run_odeint(funcptr, tfirst, y0, t, rt, at, itol, usetcrit, tcrit,
 # --------------------------------------------------------------------------
 # compile-time helpers
 # --------------------------------------------------------------------------
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
-
-
 def _lit_int(v):
     """Compile-time int out of whatever numba hands the overload, or ``None``
     when the value is only known at run time."""

@@ -13,14 +13,13 @@ Runtime dependencies, installed automatically with scijit:
 
 | package | requirement | why |
 |---|---|---|
-| Python | `>=3.9` | |
+| Python | `>=3.10` | |
 | `numba` | `>=0.66` | 0.66 adds the multi-dimensional fancy indexing the package uses |
 | `numpy` | numba's bound | scijit sets no bound of its own; the version is whatever the installed numba supports |
-| `scijitclass` | `>=0.1.6` | makes the jitclasses callable (`spl(x)`); see [credits](credits.md) |
+| `scijitclass` | `>=0.1.7` | makes the jitclasses callable (`spl(x)`); see [credits](credits.md) |
 
-`scipy` is **not** a runtime dependency and is never imported by scijit. It is a
-test extra: `pip install scijit[test]` pulls `scipy>=1.18`, against which the
-test suites assert parity.
+`scipy` is **not** a runtime dependency and is never imported by scijit. Parity
+is measured against `scipy>=1.18` during development.
 
 ---
 

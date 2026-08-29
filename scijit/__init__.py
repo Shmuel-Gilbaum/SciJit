@@ -2,15 +2,13 @@
 @njit code, backed by the same Fortran libraries scipy itself wraps.
 
 Subpackages
-    interpolate     FITPACK (Dierckx) splines, all 31 public routines
+    interpolate     FITPACK (Dierckx) splines, all 29 public routines
                     plus scipy.interpolate-equivalent jitclasses;
                     results bit-for-bit identical to scipy.interpolate.
 
     optimize        MINPACK + L-BFGS-B + SLSQP + PRIMA, minimize
-                    (unified, bound/constrained), root/fsolve/leastsq +
-                    direct MINPACK drivers with the NumbaMinpack-
-                    compatible cfunc API, and the Powell derivative-free
-                    family (uobyqa/newuoa/bobyqa/lincoa/cobyla).
+                    (unified, bound/constrained), root/fsolve/leastsq, and
+                    the Powell derivative-free family through minimize.
 
     integrate       QUADPACK + ODEPACK. quad over seven routes,
                     nquad/dblquad/tplquad over a nest of it, and

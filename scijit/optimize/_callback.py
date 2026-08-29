@@ -51,6 +51,7 @@ from numba.core.errors import TypingError
 from numba.extending import intrinsic
 
 from ._minpack import _opt_result
+from .._lib._typing import _is_none as _is_none_v
 
 __all__ = []
 
@@ -354,9 +355,6 @@ def _bh_wrap_njit(disp):
 
 
 # ------------------------------------------------------------- the choosers
-
-from .._lib._typing import _is_none as _is_none_v    # noqa: E402
-
 
 def _cb_resolve(name, callback, bh=False, de=False):
     """Python entry point: what the core is called with.

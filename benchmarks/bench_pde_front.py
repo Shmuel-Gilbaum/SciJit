@@ -19,11 +19,13 @@ Nesting per PDE solve:  adaptive steps x RHS evals/step x grid points x
 forces the adaptive stepper to take many tiny substeps right where the gradient
 is sharp -- exactly where interpreter overhead is multiplied hardest.
 
-scijit runs the WHOLE thing in one @njit driver: LSODA's RHS is a @cfunc
-that itself calls fsolve per point and sums the series -- all compiled, no
-Python boundary anywhere in the nest. scipy does the identical math with a
-Python RHS calling scipy.optimize.fsolve per point (same LSODA, same MINPACK
-underneath), so the ONLY difference is the interpreter / per-call overhead.
+scijit runs the WHOLE thing in one @njit driver: the LSODA right-hand side is
+a plain @njit function that itself calls fsolve per point and sums the series,
+and `odeint` and `fsolve` each build their own callback internally, so the nest
+is compiled end to end with no Python boundary in it. scipy does the identical
+math with a Python RHS calling scipy.optimize.fsolve per point (same LSODA,
+same MINPACK underneath), so the ONLY difference is the interpreter / per-call
+overhead.
 
 The sweep over KFREQ (per-point pure-Python work) shows the crux: the fsolve
 core is the same Fortran at C speed in both, so with KFREQ=0 the ratio is just
@@ -37,13 +39,13 @@ Run:  PYTHONPATH=. python benchmarks/bench_pde_front.py
 import math
 import time
 import numpy as np
-from numba import njit, cfunc, carray
+from numba import njit
 
 import scipy.integrate
 import scipy.optimize
 
-from scijit.integrate import odeint, lsoda_sig
-from scijit.optimize import fsolve, minpack_sig
+from scijit.integrate import odeint
+from scijit.optimize import fsolve
 
 # ---------------------------------------------------------------- geometry
 N = 90                                  # grid points
@@ -66,7 +68,7 @@ KFREQ_SWEEP = [0, 10, 40, 120]         # per-point pure-Python work to sweep
 # The local equilibrium couples to a KFREQ-term "opacity series" in z0 -- so
 # the series lives INSIDE the residual, where the root-finder evaluates it
 # ~15x per solve. In scipy that residual is a Python call summing KFREQ terms
-# hundreds of thousands of times; in scijit the @cfunc compiles it.
+# hundreds of thousands of times; in scijit the compiled callback absorbs it.
 def inner_py(z, ui, kf):
     acc = 0.0
     for k in range(1, kf + 1):
@@ -75,21 +77,13 @@ def inner_py(z, ui, kf):
             z[1] - 0.5 * math.sin(z[0])]
 
 
-@cfunc(minpack_sig)
-def inner_c(z_ptr, f_ptr, args_ptr):
-    z = carray(z_ptr, Z)
-    f = carray(f_ptr, Z)
-    a = carray(args_ptr, 2)
-    ui = a[0]
-    kf = int(a[1])
+@njit
+def inner_nb(z, ui, kf):
     acc = 0.0
     for k in range(1, kf + 1):
         acc += math.exp(-0.1 * k * abs(ui)) * math.cos(0.2 * k * z[0]) / k
-    f[0] = z[0] - 1.0 - 0.2 * ui - 0.1 * z[1] - 0.01 * acc
-    f[1] = z[1] - 0.5 * math.sin(z[0])
-
-
-_INNER = inner_c.address
+    return np.array([z[0] - 1.0 - 0.2 * ui - 0.1 * z[1] - 0.01 * acc,
+                     z[1] - 0.5 * math.sin(z[0])])
 
 
 # ---------------- method-of-lines RHS  du/dt = -u u_x + nu u_xx + S --------
@@ -105,34 +99,24 @@ def rhs_py(u, t, kf):
     return yd
 
 
-@cfunc(lsoda_sig)
-def rhs_c(t, y_ptr, yd_ptr, args_ptr):
-    u = carray(y_ptr, N)
-    yd = carray(yd_ptr, N)
-    a = carray(args_ptr, 1)
-    kf = a[0]
-    yd[0] = 0.0
-    yd[N - 1] = 0.0
+@njit
+def rhs_nb(u, t, kf):
+    yd = np.zeros(N)
     for i in range(1, N - 1):
         ui = u[i]
         ux = (u[i + 1] - u[i - 1]) * INV2DX
         uxx = (u[i + 1] - 2.0 * ui + u[i - 1]) * INVDX2
         z0 = np.array([1.0, 0.5])
-        au = np.array([ui, kf])                    # ui + KFREQ into residual
-        # scipy-shaped `fsolve` returns x directly (legacy entry deleted)
-        z = fsolve(_INNER, z0, args=au)            # inner solve, per point
+        z = fsolve(inner_nb, z0, (ui, kf))         # inner solve, per point
         S = -0.5 * z[0] * (ui - 0.2)
         yd[i] = -ui * ux + NU * uxx + S
-
-
-_RHS = rhs_c.address
+    return yd
 
 
 # ---------------- drivers -------------------------------------------------
-@njit(cache=False)
+@njit
 def run_numba(u0, t_eval, kf):
-    args = np.array([float(kf)])
-    usol, ok = odeint(_RHS, u0, t_eval, args)
+    usol = odeint(rhs_nb, u0, t_eval, (kf,))
     return usol[-1].copy()
 
 
@@ -164,10 +148,10 @@ if __name__ == "__main__":
         print(f"{kf:>6} {t_sp:>11.3f} {t_nb:>15.3f} "
               f"{t_sp / t_nb:>8.1f}x {diff:>10.2e}")
 
-    print("\nKFREQ=0: fsolve/LSODA are the same Fortran in both, so ~20x is purely")
-    print("the Python glue+loop overhead scijit removes. Adding per-point custom")
-    print("physics (the series has no vectorized scipy form) that scipy must run in")
-    print("the interpreter pushes the ratio up (~35x); it then saturates -- the")
+    print("\nKFREQ=0: fsolve/LSODA are the same Fortran in both, so the ratio is")
+    print("purely the Python glue+loop overhead scijit removes. Adding per-point")
+    print("custom physics (the series has no vectorized scipy form) that scipy must")
+    print("run in the interpreter pushes the ratio up; it then saturates -- the")
     print("transcendental terms are real FLOPs BOTH must do, numba just untaxed.")
     print("This ratio is roughly INDEPENDENT of problem size: more gridpoints or")
     print("timesteps multiply both sides about equally. What sets it is the MIX of")

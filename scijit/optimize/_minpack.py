@@ -35,6 +35,7 @@ from numba.core.errors import TypingError
 from numba.extending import overload
 import numpy as np
 from .._lib._load import load
+from .._lib._typing import _is_none, _lit_bool, _lit_str
 
 minpack_sig = types.void(types.CPointer(types.double),     # x         (in)
                          types.CPointer(types.double),     # fvec      (out)
@@ -874,12 +875,6 @@ LsqInfoJ = _result('LsqInfoJ',
                    ['fvec', 'nfev', 'njev', 'fjac', 'ipvt', 'qtf'])
 
 _EPS = float(np.finfo(np.float64).eps)     # scipy's epsfcn=None resolution
-
-
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
 
 
 def _as_x0(x0):
@@ -2589,9 +2584,6 @@ def _root_options_src(options, meth, cb_msg, jac_src, cd_base,
                         if scan_keys is not None else None)}
     exec("\n".join(src), ns)                              # noqa: S102
     return ns['impl']
-
-
-from .._lib._typing import _lit_str    # noqa: E402
 
 
 def _root_method(method):

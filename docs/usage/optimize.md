@@ -265,6 +265,39 @@ solve_many_roots(np.array([2.0, 3.0, 4.0]))
 # -> array([1.41421356, 1.73205081, 2.        ])
 ```
 
+## Solution validation: `validate`
+
+`validate` selects what a routine does when it cannot certify the solution it
+reached. `validate=True` raises. `validate=False` returns the iterate it has.
+`validate` has no counterpart in scipy's signatures, and each routine's default
+is the behaviour scipy has.
+
+Applies to `fsolve`, `leastsq`, `root`, `fixed_point` and `nnls`, where the
+default is `True`, and to `root_scalar`, where scipy does not raise on
+non-convergence and the default is `False`.
+
+**The evaluation count.** On `fsolve` with no `fprime`, and on
+`root(method='hybr')` with no `jac`, `validate=True` also probes whether the
+callback reads past the end of `args`. That probe evaluates the callback twice
+per solve, and `validate=False` skips both. On the two-equation `system`
+above, `nfev` reads 15 under `validate=True` and 13 under `validate=False`, for
+the same `x`. Every other routine, and every other path through these two,
+evaluates the callback the same number of times either way.
+
+What two evaluations are worth depends on the workload. As one measured
+example, an AGN accretion-disc model running 829 root-finds per disc took 11.8%
+less time over ten discs under `validate=False`, and every solved unknown was
+bit-identical.
+
+**The trade-off.** Under `validate=False` the condition that would have raised
+is still readable: `ier` on `fsolve` and `leastsq`, `status` and `success` on
+`root`, `converged` on `root_scalar` and on `fixed_point`. `fsolve` and
+`leastsq` return `ier` only under `full_output=True`, and `fixed_point` returns
+`converged` only under `full_output=True`, so pair `validate=False` with
+`full_output=True`. `nnls` publishes no status field, and under
+`validate=False` a run that hit `maxiter` is indistinguishable from a converged
+one.
+
 ## Least squares: `leastsq`, `curve_fit`, `lsq_linear`
 
 ### Nonlinear least squares

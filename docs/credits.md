@@ -15,12 +15,12 @@ code. It is a standalone `@jitclass` replacement, usable in any numba project.
 ## Development
 
 Much of scijit (the Fortran `bind(c)` wrappers, the pure-`@njit` ports, the
-test suites, and this documentation) was written with Anthropic's Claude, via
-Claude Code. The direction is the author's: the architecture, the decision of
-what to wrap versus port, and the review of the output. Every routine is
-verified against SciPy in the test suites. The numerical work itself belongs to
-the upstream libraries credited below; scijit wraps and ports them, it does not
-reinvent them.
+development test suites, and this documentation) was written with Anthropic's
+Claude, via Claude Code. The direction is the author's: the architecture, the
+decision of what to wrap versus port, and the review of the output. Every
+routine is verified against SciPy during development. The numerical work itself
+belongs to the upstream libraries credited below; scijit wraps and ports them,
+it does not reinvent them.
 
 ## Nicholas Wogan
 
@@ -28,16 +28,14 @@ reinvent them.
 
 - **[NumbaMinpack](https://github.com/Nicholaswogan/NumbaMinpack)**: demonstrated
   the approach this package is built on (call a compiled Fortran pack from inside
-  `@njit` via a `@cfunc` address + `bind(c)` wrapper). scijit keeps its low-level
-  MINPACK signatures (`minpack_sig`, `hybrd`, `lmdif`); the public
-  `fsolve`/`leastsq` follow scipy's API. His MIT notice is in
+  `@njit` via a `@cfunc` address + `bind(c)` wrapper). scijit's `fsolve` and
+  `leastsq` follow scipy's API and build the `@cfunc` themselves. His MIT notice is in
   `src/minpack/LICENSE_NumbaMinpack.txt`.
 - **[odepack](https://github.com/Nicholaswogan/odepack)**: his thread-safe
   modern-Fortran ODEPACK is the library scijit vendored and wrapped for
   `scijit.integrate`'s LSODA/LSODAR.
-- **[numbalsoda](https://github.com/Nicholaswogan/numbalsoda)**:
-  `scijit.integrate`'s `lsoda_sig` cfunc signature matches numbalsoda's. scijit's
-  `odeint` itself follows scipy's API.
+- **[numbalsoda](https://github.com/Nicholaswogan/numbalsoda)**: the same
+  approach applied to LSODA. `scijit.integrate`'s `odeint` follows scipy's API.
 
 A related project, not used here:
 [NumbaQuadpack](https://github.com/Nicholaswogan/NumbaQuadpack) (also
@@ -77,7 +75,7 @@ take an args pointer).
   a caller can reach them. Each file carries a comment recording the change and
   the original values.
 - scipy's `scipy.interpolate`, `scipy.optimize` and `scipy.integrate` wrap the
-  same Fortran and are the references our test suites compare against.
+  same Fortran and are the references scijit is compared against.
 
 ## Upstream libraries & licenses
 

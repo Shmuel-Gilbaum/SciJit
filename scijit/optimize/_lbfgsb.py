@@ -29,6 +29,7 @@ from numba import njit, types
 from numba.extending import overload
 import numpy as np
 from .._lib._load import load
+from .._lib._typing import _is_none, _lit_bool
 
 _lib, _sig = load(__file__, "liblbfgsb")
 
@@ -104,12 +105,6 @@ _BOUNDS_SHAPE_MSG = (
     "a MIXED list such as [(None, 5.0), (0.0, 1.0)] cannot be used: numba "
     "refuses to unbox a heterogeneous list. The same pairs as a TUPLE work, "
     "and so does the all-inf spelling.")
-
-
-from .._lib._typing import _lit_bool    # noqa: E402
-
-
-from .._lib._typing import _is_none    # noqa: E402
 
 
 def _eps_at(eps, i):

@@ -129,6 +129,7 @@ from ._callback import (_bh_noop, _cb_noop, _cb_install, _cb_release,
 # optimize without stats. FUTURE WORK: re-import from `..stats._qmc` when
 # stats ships publicly, and delete `optimize/_qmc.py`.
 from ._qmc import halton as _qmc_halton, sobol as _qmc_sobol
+from .._lib._typing import _is_none as _is_none_g, _lit_bool as _lit_bool_g
 
 
 @njit
@@ -431,9 +432,6 @@ def _mgrid_axis(lo, hi, Ns):
     for i in range(Ns):
         g[i] = np.float64(i) * step + lo
     return g
-
-
-from .._lib._typing import _lit_bool as _lit_bool_g   # noqa: E402
 
 
 def _lit_int_g(v):
@@ -1361,9 +1359,6 @@ def _bh_mk_keys(mk):
     if isinstance(mk, types.DictType):
         return []                            # keys unknown until run time
     return None
-
-
-from .._lib._typing import _is_none as _is_none_g    # noqa: E402
 
 
 def _bh_scope_ok(*vals):

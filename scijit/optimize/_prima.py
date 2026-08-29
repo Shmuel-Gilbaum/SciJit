@@ -35,6 +35,7 @@ from numba.extending import overload
 import numpy as np
 from .._lib._load import load
 import warnings
+from .._lib._typing import _is_none
 
 prima_sig = types.void(types.CPointer(types.double),     # x      (in)
                        types.CPointer(types.double),     # f      (out)
@@ -808,9 +809,6 @@ def _prepend_nm_args(args, cargs, n, m):
 # The objective may be `f(x, args)` or `f(x)`; the arity is read off the
 # dispatcher.
 # --------------------------------------------------------------------------
-
-
-from .._lib._typing import _is_none    # noqa: E402
 
 
 def _as_arr1(v, fill):

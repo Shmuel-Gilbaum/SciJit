@@ -5,10 +5,10 @@
 
 A scipy-equivalent library callable from inside numba `@njit` code. scijit
 either wraps the same Fortran packs scipy wraps, or re-implements scipy's
-pure-Python routines as `@njit`. Results match scipy, verified against it in
-the test suite. It pays off most when the same routine runs many times inside a
-compiled loop, where scipy would pay Python's per-call overhead on every
-iteration.
+pure-Python routines as `@njit`. Results match scipy, checked routine by
+routine against it during development. It pays off most when the same routine
+runs many times inside a compiled loop, where scipy would pay Python's
+per-call overhead on every iteration.
 
 scipy's classes are called like `spl(x)`, but a numba jitclass has no
 `__call__`. To mirror scipy, scijit uses
@@ -32,12 +32,6 @@ def area(a, b):
 
 area(0.0, 1.0)                                 # 0.6321205588285578
 ```
-
-
-
-
-
-
 
 ## Getting started
 
