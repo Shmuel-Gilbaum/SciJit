@@ -1126,10 +1126,7 @@ def _brack_args_ovl(brack):
         "code; use a tuple.")
 
 
-def _is_none_ty(x):
-    """Is this numba type ``None``, however it was spelled?"""
-    return (x is None or isinstance(x, types.NoneType)
-            or (isinstance(x, types.Omitted) and x.value is None))
+from .._lib._typing import _is_none as _is_none_ty   # noqa: E402
 
 
 def _lit_fo(name, full_output):

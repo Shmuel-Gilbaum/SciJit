@@ -20,7 +20,7 @@ copyright = "2026, Shmuel Gilbaum"
 # The dev tree is 0.24.0; the PUBLIC release is 0.1.0. The projection to the
 # public tree patches this to 0.1.0. Keep it in one place so the projection
 # script only rewrites this line.
-release = "0.1.0"  # PUBLIC RELEASE: set to "0.1.0"
+release = "0.1.3"
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ----------------------------------------------------

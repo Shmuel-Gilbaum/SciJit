@@ -24,22 +24,18 @@ solution array alone; ``full_output=True`` returns ``(y, infodict)``.
 **infodict is a namedtuple**, so ``info['nfe']`` is spelled ``info.nfe``.
 Field names and contents are scipy's 13 keys.
 """
-import ctypes as ct
 import inspect
-import os
-import platform
+from .._lib._load import load
 import warnings
 from collections import namedtuple
 
-import llvmlite.ir as ir
 import numpy as np
 from numba import carray, cfunc, njit, objmode, typeof, types
 from numba.core.errors import TypingError
-from numba.extending import intrinsic, overload
+from numba.extending import overload
 
 from ._odepack import _lsoda_sig
 from .._probe import wrote_ydot as _wrote_ydot_t
-from .._probe import SENTINEL_A, SENTINEL_B, _untouched
 
 __all__ = ['odeint', 'InfoDict', 'ODEintWarning', 'ODEpackError']
 
@@ -99,27 +95,7 @@ class ODEpackError(Exception):
     Extra arguments must be in a tuple.
     """
 
-_rootdir = os.path.dirname(os.path.abspath(__file__))
-if platform.uname()[0] == "Windows":
-    _name = "\\liblsoda.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/liblsoda.so"
-else:
-    _name = "/liblsoda.dylib"
-_lib = ct.CDLL(_rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Declare a bind(c) wrapper as ``nargs`` opaque pointers returning void.
-
-    ``nargs`` must match the wrapper's argument list in
-    ``src/odepack/wrappers_scipy.f90``.  A miscount that disagrees with the
-    call site raises; a miscount CONSISTENT with the call site raises nothing
-    and runs into undefined behaviour, so recount against the Fortran.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "liblsoda")
 
 
 # Argument count recounted against wrappers_scipy.f90, one continuation line
@@ -338,10 +314,6 @@ _JAC_SHAPE_BAND_MSG = (
     "array with jac[uband + i - j, j] = d f_i / d y_j, the layout "
     "scipy.linalg.solve_banded takes")
 
-_JAC_SHAPE_BAND_T_MSG = (
-    "with ml/mu and col_deriv the jacobian must return the TRANSPOSE of the "
-    "packed array, shape (n, ml + mu + 1)")
-
 
 def _jac_arity(py, what="jacobian"):
     """Positional parameter count of a plain ``@njit`` Jacobian.
@@ -395,8 +367,8 @@ def _adapter_jac(py, banded, tfirst=True, padded=True, coldiv=False,
     exception inside a ``@cfunc`` is printed as "Exception ignored in" and the
     function returns, measured, so the caller never sees it and LSODA would
     carry on regardless.  The shape is therefore checked once in the glue,
-    before the run, by :func:`_check_jac_shape_full` and its two siblings,
-    which raise a real ``ValueError``.  This branch is what remains if a
+    before the run, by :func:`_check_jac_shape_full` and
+    :func:`_check_jac_shape_band`, which raise a real ``ValueError``.  This branch is what remains if a
     Jacobian returns different shapes on different calls.
     """
     nparam = _jac_arity(py)
@@ -523,14 +495,6 @@ def _check_jac_shape_band(j, n, ml, mu):
 
 
 @njit
-def _check_jac_shape_band_t(j, n, ml, mu):
-    """``col_deriv=1`` banded: the packed array arrives transposed,
-    ``(n, ml + mu + 1)``."""
-    if j.shape[0] != n or j.shape[1] != ml + mu + 1:
-        raise ValueError(_JAC_SHAPE_BAND_T_MSG)
-
-
-@njit
 def _prepend_neq(args, neq):
     """args buffer the ADAPTER path expects: ``[neq, nargs, *args]``."""
     out = np.empty(args.size + 2, np.float64)
@@ -573,53 +537,6 @@ _ARGS_MSG = ("args= was given but the right-hand side takes only (y, t), so "
 
 
 # --------------------------------------------------------------------------
-# y-first callback probe.  _probe._call_tp3 emits void(double, double*,
-# double*, double*); a _lsoda_yfirst_sig cfunc is void(double*, double,
-# double*, double*).  The two happen to share a register assignment under the
-# x86-64 System V ABI, but not under the Windows x64 one, where an argument's
-# register is chosen by POSITION.  So the y-first probe needs its own call.
-# --------------------------------------------------------------------------
-def _dptr():
-    """LLVM ``double*``, the pointer type every argument of the y-first
-    callback that is not ``t`` crosses as."""
-    return ir.DoubleType().as_pointer()
-
-
-@intrinsic
-def _call_ptp2(typingctx, fn_addr, p0, t, p1, p2):
-    """Call ``void(double*, double, double*, double*)`` by raw address."""
-    signature = types.void(types.intp, types.intp, types.double, types.intp,
-                           types.intp)
-
-    def codegen(context, builder, sg, args):
-        fnaddr, a0, tv, a1, a2 = args
-        fnty = ir.FunctionType(ir.VoidType(),
-                               [_dptr(), ir.DoubleType(), _dptr(), _dptr()])
-        fptr = builder.inttoptr(fnaddr, fnty.as_pointer())
-        builder.call(fptr, [builder.inttoptr(a0, _dptr()), tv,
-                            builder.inttoptr(a1, _dptr()),
-                            builder.inttoptr(a2, _dptr())])
-        return context.get_dummy_value()
-
-    return signature, codegen
-
-
-@njit
-def _wrote_ydot_y(fn_addr, t, y, args):
-    """True if a ``_lsoda_yfirst_sig`` right-hand side writes ``ydot``."""
-    yw = np.ascontiguousarray(np.asarray(y).astype(np.float64))
-    aw = np.ascontiguousarray(np.asarray(args).astype(np.float64))
-    n = yw.size
-    d1 = np.full(n, SENTINEL_A)
-    _call_ptp2(fn_addr, yw.ctypes.data, t, d1.ctypes.data, aw.ctypes.data)
-    if not _untouched(d1, SENTINEL_A):
-        return True
-    d2 = np.full(n, SENTINEL_B)
-    _call_ptp2(fn_addr, yw.ctypes.data, t, d2.ctypes.data, aw.ctypes.data)
-    return not _untouched(d2, SENTINEL_B)
-
-
-# --------------------------------------------------------------------------
 # input coercion
 # --------------------------------------------------------------------------
 def _as_1d(a):
@@ -659,67 +576,6 @@ def _as_1d_ovl(a):
         # ascontiguousarray: a strided view's .ctypes.data points into the
         # base buffer and Fortran reads contiguously (package gotcha 0).
         return np.ascontiguousarray(np.asarray(a)).astype(np.float64)
-    return impl
-
-
-def _as_args(args):
-    """1-D contiguous float64 view of ``args``; ``()`` becomes a dummy."""
-    if isinstance(args, tuple):
-        if len(args) == 0:
-            return np.array([0.0])
-        try:
-            return np.asarray(args, dtype=np.float64).ravel()
-        except (ValueError, TypeError):
-            raise ValueError(
-                "args must pack into one flat float64 buffer. scipy's args "
-                "is a tuple of OBJECTS, each passed as a separate parameter "
-                "of a python callable; a @cfunc receives a single double* "
-                "instead, so a heterogeneous or ragged tuple such as "
-                "(matrix, scale) cannot be represented. Concatenate the "
-                "values yourself, e.g. np.concatenate((matrix.ravel(), "
-                "np.array([scale]))), and index them flat in the callback")
-    try:
-        return np.ascontiguousarray(np.asarray(args)).ravel().astype(np.float64)
-    except (ValueError, TypeError):
-        raise ValueError(
-            "args must be numeric and pack into one flat float64 buffer; "
-            "a @cfunc receives a single double*")
-
-
-@overload(_as_args)
-def _as_args_ovl(args):
-    """Compiled body for :func:`_as_args`, one per argument shape.
-
-    scipy's ``args=()`` becomes a one-element dummy, because a Fortran
-    pointer has to point at something.  A tuple is unrolled element by
-    element, since its length is a compile-time property.
-    """
-    if isinstance(args, tuple) and len(args) == 0:      # omitted default
-        def impl(args):
-            return np.array([0.0])
-        return impl
-    if isinstance(args, types.BaseTuple):
-        n = len(args)
-        if n == 0:
-            def impl(args):
-                return np.array([0.0])
-            return impl
-
-        def impl(args):
-            out = np.empty(n, np.float64)
-            for i in range(n):
-                out[i] = np.float64(args[i])
-            return out
-        return impl
-    if isinstance(args, (types.Float, types.Integer)):
-        def impl(args):
-            out = np.empty(1, np.float64)
-            out[0] = np.float64(args)
-            return out
-        return impl
-
-    def impl(args):
-        return np.ascontiguousarray(np.asarray(args)).ravel().astype(np.float64)
     return impl
 
 
@@ -1583,27 +1439,10 @@ def _run_odeint(funcptr, tfirst, y0, t, rt, at, itol, usetcrit, tcrit,
 # --------------------------------------------------------------------------
 # compile-time helpers
 # --------------------------------------------------------------------------
-def _lit_bool(v):
-    """Compile-time bool out of whatever numba hands the overload."""
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None                       # runtime variable: cannot be served
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _is_none(v):
-    """True when an argument is ``None`` at TYPING time, in any of the three
-    spellings numba hands an overload: the Python value, ``types.NoneType``,
-    or an ``Omitted`` default."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _lit_int(v):
@@ -1677,41 +1516,6 @@ def _is_banded_odeint(ml, mu):
     return None
 
 
-def _has_args(args):
-    """True when the caller passed parameters, from Python.
-
-    ``args=()`` is scipy's default and carries nothing.  Anything else with
-    a length carries what it holds; a bare scalar counts as one parameter.
-    """
-    if args is None:
-        return False
-    try:
-        return len(args) > 0
-    except TypeError:
-        return True
-
-
-def _is_empty_args(v):
-    """True when ``args`` is known at TYPING time to carry no parameters.
-
-    Only the empty spellings are recognisable that early: the omitted
-    default, ``None``, and a zero-length tuple.  An array's length is a
-    runtime property, so one is reported as carrying parameters.
-
-    An omitted default reaches an overload in any of three shapes, as
-    :func:`_is_none` records: the bare Python value, a numba type, or an
-    ``Omitted`` wrapper.  numba hands this one the bare ``()``.
-    """
-    if _is_none(v):
-        return True
-    if isinstance(v, tuple):
-        return len(v) == 0
-    if isinstance(v, types.Omitted):
-        val = v.value
-        return val is None or (isinstance(val, tuple) and len(val) == 0)
-    if isinstance(v, types.BaseTuple):
-        return len(v) == 0
-    return False
 
 
 _SEQ = (types.Array, types.BaseTuple, types.List)

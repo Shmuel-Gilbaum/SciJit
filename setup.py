@@ -20,13 +20,10 @@ Currently shipped packs
     quadpack -> scijit.integrate     (adaptive integration / quad)
     odepack  -> scijit.integrate     (LSODA/LSODAR ODE solving)
 To add another pack: PACKS row + sources in src/<pack>/ (a SOURCES.txt
-there fixes the compile order when alphabetical is not enough). A pack
-that needs external libraries (arpack -> BLAS/LAPACK) lists them in
-EXTRA_LINK; the subpackage may be dotted ('sparse.linalg').
+there fixes the compile order when alphabetical is not enough). The
+subpackage may be dotted ('sparse.linalg').
 
-Requires a Fortran compiler (gfortran) on PATH. arpack additionally
-needs a BLAS and LAPACK to link against (any of reference
-blas/lapack, OpenBLAS, MKL); see blas_lapack_flags().
+Requires a Fortran compiler (gfortran) on PATH.
 """
 import glob
 import os
@@ -215,6 +212,15 @@ def build_shared_lib(srcdir, out, n_prelude):
 
     if system == 'Linux':
         link.append('-Wl,-z,noexecstack')
+        # The source list is a COMPUTED closure (lapack_closure.py), not the
+        # whole pack, so a walker bug drops a file.  Without this flag that
+        # links cleanly and the symbol binds at load time to whatever else in
+        # the process exports it -- numpy and scipy both bundle their own
+        # LAPACK/BLAS -- giving a plausible wrong answer.  --no-undefined
+        # makes it a build error naming the symbol instead.  Every symbol
+        # this library legitimately leaves undefined is libc or libgfortran,
+        # resolved by runtime_flags() above; a probe link confirmed it passes.
+        link.append('-Wl,--no-undefined')
 
     if system == 'Windows':
         # emit a MinGW import library so consuming packs can -l against it
@@ -371,7 +377,7 @@ for _, subpkg, libbase, _ in SHARED_LIBS:
     
 setup(
     name='scijit',
-    version='0.1.2',
+    version='0.1.3',
     author='Shmuel Gilbaum',
     author_email='s.gilbaum@gmail.com',
     url='https://github.com/shmuel-gilbaum/SciJit',
@@ -388,12 +394,19 @@ setup(
     long_description=open(os.path.join(ROOT, 'README.md'),
                           encoding='utf-8').read(),
     long_description_content_type='text/markdown',
+    # Only terms describing what the RELEASE actually ships. The dev tree has
+    # fft, special, sparse.linalg and more; advertising them here would send a
+    # PyPI searcher to a package that does not contain them. Add each back as
+    # it ships. Kept in step with the GitHub topics.
     keywords=[
         'numba', 'scipy', 'njit', 'jit', 'numba-scipy',
-        'scientific-computing', 'fortran',
-        'ode', 'solve_ivp', 'odeint', 'fsolve', 'root-finding',
-        'minpack', 'lapack', 'fitpack', 'quadpack', 'odepack', 'arpack',
-        'fft', 'interpolation', 'splines', 'special-functions', 'bessel',
+        'scientific-computing', 'numerical-methods', 'fortran',
+        'ode', 'ode-solver', 'solve_ivp', 'odeint', 'quadrature', 'integration',
+        'fsolve', 'root-finding', 'least-squares', 'curve-fitting',
+        'optimization', 'minimization',
+        'interpolation', 'splines',
+        'minpack', 'lapack', 'fitpack', 'quadpack', 'odepack',
+        'lbfgsb', 'slsqp', 'prima',
     ],
     classifiers=[
         # No 'License ::' classifier. setuptools deprecated them in favour of

@@ -24,48 +24,20 @@ array, using +-np.inf for unbounded ends, or None for an unconstrained
 minimization. The nbd flags scipy computes are derived the same way
 here.
 """
-import ctypes as ct
 
 from numba import njit, types
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\liblbfgsb.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/liblbfgsb.so"
-else:
-    _name = "/liblbfgsb.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give the L-BFGS-B wrapper its ctypes signature.
-
-    The ``bind(c)`` entry point in ``src/lbfgsb/05_wrappers.f90`` takes
-    every argument by reference and returns nothing, so the signature is
-    ``[c_void_p] * nargs`` with ``restype = None`` and the call sites
-    pass ``array.ctypes.data``. ``nargs`` must be recounted against that
-    file whenever the wrapper changes: a count that disagrees with the
-    call site surfaces as a cryptic numba ``ExternalFunctionPointer``
-    typing error, and a count that is wrong in both places raises nothing
-    at all and runs into undefined behaviour.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "liblbfgsb")
 
 
 _setulb = _sig(_lib.setulb_wrapper, 19)
 
 # `args` coercion and the result-container factory are shared with the MINPACK
 # entry points rather than copied
-from ._minpack import _as_args, _result      # noqa: E402
+from ._minpack import _result                # noqa: E402
 # one spelling of CPython's type names for a message, shared with _scalar.py
 from ._scalar import _ty_name       # noqa: E402
 from ._callback import (_cb_noop, _cb_install, _cb_release,   # noqa: E402
@@ -134,47 +106,10 @@ _BOUNDS_SHAPE_MSG = (
     "and so does the all-inf spelling.")
 
 
-def _lit_bool(v):
-    """Resolve an ``@overload`` argument to a compile-time bool, or None.
-
-    An overload whose RETURN TYPE depends on a flag has to know the flag
-    while it is typing the body, and the flag arrives in five different
-    shapes. ``None`` means it is a runtime variable and cannot be served:
-    the caller then returns ``None`` from the overload, which numba
-    reports as a TypingError.
-
-    The first two branches are not redundant with the last two. numba
-    hands an OMITTED argument the RAW PYTHON DEFAULT, a builtins ``bool``
-    or ``int``, never a ``types.BooleanLiteral`` -- measured on numba
-    0.66, omitting the argument gives ``bool True`` where passing it
-    explicitly gives ``Literal[bool](True)``. Deleting them breaks every
-    call that leaves the flag out.
-    """
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _is_none(v):
-    """True when an ``@overload`` argument is absent.
-
-    Three unrelated objects mean absent, and an overload deciding whether
-    to serve a call has to accept all three: Python's own ``None``, which
-    is what numba hands over for an OMITTED argument; a
-    ``types.NoneType``, which is an explicitly passed ``None``; and a
-    ``types.Omitted`` wrapping ``None``. Dropping the first test breaks
-    every call that leaves the argument out.
-    """
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _eps_at(eps, i):

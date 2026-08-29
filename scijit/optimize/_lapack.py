@@ -12,32 +12,12 @@ Both functions are vendored verbatim from ``scijit.linalg`` (``_tier2.qr_pivot``
 public package, re-import them from ``..linalg`` and delete this module and
 ``src/optlapack``.
 """
-import ctypes as ct
-import os
-import platform
+from .._lib._load import load
 
 import numpy as np
 from numba import njit
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\liboptlapack.dll"
-    _libdir = os.path.join(rootdir, "..", "_lib")
-    if os.path.isdir(_libdir):
-        os.add_dll_directory(os.path.abspath(_libdir))
-elif platform.uname()[0] == "Linux":
-    _name = "/liboptlapack.so"
-else:
-    _name = "/liboptlapack.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "liboptlapack")
 
 
 _dtrtrs = _sig(_lib.dtrtrs_c, 10)

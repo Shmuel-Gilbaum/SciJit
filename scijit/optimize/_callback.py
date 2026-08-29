@@ -355,14 +355,7 @@ def _bh_wrap_njit(disp):
 
 # ------------------------------------------------------------- the choosers
 
-def _is_none_v(v):
-    """True when an ``@overload`` argument is absent.
-
-    The same three shapes ``_lbfgsb._is_none`` reads, spelled here so this
-    module sits below every solver rather than beside one.
-    """
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none as _is_none_v    # noqa: E402
 
 
 def _cb_resolve(name, callback, bh=False, de=False):

@@ -26,8 +26,6 @@ The Fortran wrapper parks the callback in a module variable carrying
 solves are safe and these are callable from a `numba.prange` loop.
 Nested and sequential solves inside one @njit function are fine too.
 """
-import ctypes as ct
-import inspect
 import operator
 import warnings
 from collections import namedtuple
@@ -36,8 +34,7 @@ from numba import carray, cfunc, njit, objmode, prange, types, typeof
 from numba.core.errors import TypingError
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 
 minpack_sig = types.void(types.CPointer(types.double),     # x         (in)
                          types.CPointer(types.double),     # fvec      (out)
@@ -141,31 +138,7 @@ from .._probe import residual_status as _resid_status
 from .._probe import jac_residual_status as _jac_status
 from .._probe import _call_p3, SENTINEL_A
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libminpack.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libminpack.so"
-else:
-    _name = "/libminpack.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give one MINPACK wrapper its ctypes signature.
-
-    Every ``bind(c)`` entry point in ``src/minpack/wrappers.f90`` and
-    ``wrappers_scipy.f90`` takes its arguments by reference and returns
-    nothing, so the signature is always ``[c_void_p] * nargs`` with
-    ``restype = None`` and the call sites pass ``array.ctypes.data``.
-    ``nargs`` is the one thing that has to be right; see the note at the
-    call sites below.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libminpack")
 
 
 # argument counts recounted against wrappers.f90, a miscount surfaces as
@@ -903,43 +876,10 @@ LsqInfoJ = _result('LsqInfoJ',
 _EPS = float(np.finfo(np.float64).eps)     # scipy's epsfcn=None resolution
 
 
-def _lit_bool(v):
-    """Compile-time bool out of whatever numba hands the overload.
-
-    An overload whose RETURN TYPE depends on a flag has to know the flag
-    while it is typing the body, and the flag arrives in five different
-    shapes. ``None`` means it is a runtime variable and cannot be served.
-
-    The first two branches are not redundant with the last two. numba
-    hands an OMITTED argument the RAW PYTHON DEFAULT, a builtins ``bool``
-    or ``int``, never a ``types.BooleanLiteral``, so deleting them breaks
-    every call that leaves the flag out.
-    """
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None                            # runtime variable: cannot be served
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _is_none(v):
-    """True when an ``@overload`` argument is absent.
-
-    Three unrelated objects mean absent, and an overload deciding whether
-    to serve a call has to accept all three: Python's own ``None``, which
-    is what numba hands over for an OMITTED argument; a
-    ``types.NoneType``, which is an explicitly passed ``None``; and a
-    ``types.Omitted`` wrapping ``None``. Dropping the first test breaks
-    every call that leaves the argument out.
-    """
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _as_x0(x0):
@@ -984,70 +924,6 @@ def _as_x0_ovl(x0):
     return impl
 
 
-def _as_args(args):
-    """1-D contiguous float64 view of ``args``; ``()`` becomes a dummy."""
-    if isinstance(args, tuple):
-        if len(args) == 0:
-            return np.array([0.0])
-        try:
-            return np.asarray(args, dtype=np.float64).ravel()
-        except (ValueError, TypeError):
-            raise ValueError(
-                "args must pack into one flat float64 buffer. scipy's args is "
-                "a tuple of OBJECTS, each passed as a separate parameter of a "
-                "python callable; a @cfunc receives a single double* instead, "
-                "so a heterogeneous or ragged tuple such as (matrix, scale) "
-                "cannot be represented. Concatenate the values yourself, e.g. "
-                "np.concatenate((matrix.ravel(), np.array([scale]))), and "
-                "index them flat in the callback")
-    try:
-        return np.ascontiguousarray(np.asarray(args)).ravel().astype(np.float64)
-    except (ValueError, TypeError):
-        raise ValueError(
-            "args must be numeric and pack into one flat float64 buffer; "
-            "a @cfunc receives a single double*")
-
-
-@overload(_as_args)
-def _as_args_ovl(args):
-    """@njit implementation of `_as_args`, one body per argument shape.
-
-    The function above is a plain Python one and cannot be reached from
-    inside ``@njit``. The empty tuple is tested TWICE here and both tests
-    are needed: an omitted ``args=()`` arrives as the raw Python ``()``
-    while an explicitly passed one arrives as a ``types.BaseTuple`` of
-    length 0. Either way the result is a length-1 dummy, because a
-    ``@cfunc`` takes a ``double*`` that has to point somewhere.
-    """
-    if isinstance(args, tuple) and len(args) == 0:          # omitted default
-        def impl(args):
-            return np.array([0.0])
-        return impl
-    if isinstance(args, types.BaseTuple):
-        k = len(args)
-        if k == 0:
-            def impl(args):
-                return np.array([0.0])
-            return impl
-
-        def impl(args):
-            out = np.empty(k, np.float64)
-            for i in range(k):
-                out[i] = np.float64(args[i])
-            return out
-        return impl
-    if isinstance(args, (types.Float, types.Integer)):
-        def impl(args):
-            out = np.empty(1, np.float64)
-            out[0] = np.float64(args)
-            return out
-        return impl
-
-    def impl(args):
-        return np.ascontiguousarray(np.asarray(args)).ravel().astype(np.float64)
-    return impl
-
-
 # --------------------------------------------------------------------------
 # scipy's `args`: a TUPLE of objects, splatted into the callback as
 # ``f(x, *args)``.  The scipy-shaped front ends take a plain @njit callback
@@ -1059,7 +935,7 @@ def _as_args_ovl(args):
 # takes its shape followed by its data.
 #
 # The raw ``.address`` drivers below (hybrd, hybrj, lmdif, lmder) are
-# untouched by any of this: they keep `_as_args` and the flat float64 buffer.
+# untouched by any of this: they take the flat float64 buffer directly.
 # --------------------------------------------------------------------------
 
 #: kind codes: a float, an integer and a boolean scalar; ``k >= 1`` is an
@@ -1222,9 +1098,15 @@ def _pack_args(args):
     through the same view by the adapter, so a value above ``2**53`` is not
     rounded on the way. The slot's kind is known per argument when the
     adapter is generated, so nothing has to be decided from the bits.
+
+    `_arg_kinds` runs first so a non-numeric entry is refused here rather
+    than packed as a NaN.  Without it ``_pack_args(None)`` returned
+    ``[nan]`` while the compiled body raised.
     """
+    at = _as_args_tuple(args)
+    _arg_kinds(at)
     parts = []
-    for v in _as_args_tuple(args):
+    for v in at:
         a = v if isinstance(v, np.ndarray) else np.asarray(v)
         if a.ndim == 0 and a.dtype.kind in 'iu':
             parts.append((_K_INT, np.int64(a)))
@@ -1480,68 +1362,6 @@ def _prepend_nm(args, n, m):
 # the cfunc: drop the reference and the baked-in address dangles.
 # --------------------------------------------------------------------------
 _LSQ_ADAPTERS = {}
-
-
-def _takes_args(py):
-    """Does this residual/jacobian want the ``args`` buffer as a 2nd argument?
-
-    The package convention elsewhere (L-BFGS-B, SLSQP, COBYLA) is
-    ``f(x, args)``; the MINPACK entry points historically documented ``f(x)``
-    with the parameters closed over.  BOTH are served, decided here from the
-    arity of the python function, because ``args=`` is meaningless on the
-    1-argument spelling and silently vanished before this.
-    """
-    try:
-        sig = inspect.signature(py)
-    except (TypeError, ValueError):             # builtins, C callables
-        return False
-    n = 0
-    for p in sig.parameters.values():
-        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD):
-            n += 1
-        elif p.kind is p.VAR_POSITIONAL:
-            return True
-    return n >= 2
-
-
-def _args_given_ty(args):
-    """Compile-time answer to `_args_given` from the numba TYPE of ``args``.
-
-    An omitted argument or an empty tuple is "not given"; anything else is
-    treated as supplied, so the guard folds to a constant and costs nothing
-    at runtime.
-    """
-    if _is_none(args):
-        return False
-    if isinstance(args, types.Omitted):
-        return _args_given(args.value)
-    if isinstance(args, types.BaseTuple):
-        return len(args) > 0
-    if not isinstance(args, types.Type):
-        return _args_given(args)        # numba hands the raw python default
-    return True
-
-
-def _args_given(args):
-    """Did the CALLER supply parameters, as opposed to leaving the default?
-
-    ``a.size`` cannot answer this: ``_as_args(())`` yields a length-1 buffer
-    and the legacy ``fsolve`` default is literally ``np.array([0.0])``, so a
-    size test fires on every ordinary call.
-    """
-    if args is None:
-        return False
-    try:
-        return len(args) > 0
-    except TypeError:
-        return True                     # a bare scalar IS a parameter
-
-
-_ARGS_IGNORED_MSG = (
-    "leastsq/root/fsolve: `args` was given but the callback takes only "
-    "`x`, so the values could never reach it. Either close the parameters "
-    "over the callback and drop `args`, or give the callback the "
-    "`f(x, args)` signature the rest of scijit uses.")
 
 
 _LSQ_RESID_SRC = """
@@ -2771,15 +2591,7 @@ def _root_options_src(options, meth, cb_msg, jac_src, cd_base,
     return ns['impl']
 
 
-def _lit_str(v):
-    """Compile-time str out of whatever numba hands the overload."""
-    if isinstance(v, str):
-        return v
-    if isinstance(v, types.StringLiteral):
-        return v.literal_value
-    if isinstance(v, types.Omitted):
-        return v.value
-    return None
+from .._lib._typing import _lit_str    # noqa: E402
 
 
 def _root_method(method):
@@ -2942,13 +2754,14 @@ def root(fun, x0, args=(), method='hybr', jac=None, tol=None, callback=None,
     factor.
 
     ``nfev`` counts the evaluations this package makes before the solver
-    runs as well as MINPACK's own: one to check that the callback writes the
-    residual, one on ``'hybr'`` to read the residual count, and two more on
-    ``'hybr'`` without `jac` under ``validate=True`` for the read probe. On
-    ``'hybr'`` it is therefore two higher than scipy's without `jac` and
-    equal to scipy's with one. On ``'lm'`` the evaluation that reads the
-    residual length is not counted, as scipy does not count its own, and
-    nor is the one `jac` costs for its shape check.
+    runs as well as MINPACK's own: one on ``'hybr'`` to read the residual
+    count, two more on ``'hybr'`` without `jac` under ``validate=True`` for
+    the read probe, and one on ``'lm'`` to check that the callback writes
+    the residual. scipy counts two of its own, so on ``'hybr'`` it is one
+    higher than scipy's without `jac` under ``validate=True`` and one lower
+    on the other two, and on ``'lm'`` it is one lower. On ``'lm'`` the
+    evaluation that reads the residual length is not counted, as scipy does
+    not count its own, and nor is the one `jac` costs for its shape check.
 
     ``args=None`` raises. scipy reads it as the one-item tuple ``(None,)``
     and calls ``f(x, None)``, and ``None`` is not a real number.
@@ -3408,13 +3221,6 @@ def _root_ovl(fun, x0, args=(), method='hybr', jac=None, tol=None,
 # algorithm; `fsolve` (python) and its `@overload` (njit) only resolve the
 # callback and slice the return.
 # ==========================================================================
-def _ck(fn, args, a):
-    """`args` reach a 1-argument callback nowhere; say so instead of dropping."""
-    if _args_given(args) and not _takes_args(getattr(fn, 'py_func', fn)):
-        raise ValueError(_ARGS_IGNORED_MSG)
-    return a
-
-
 # argument counts recounted against wrappers_scipy.f90
 _hybrd_sp = _sig(_lib.hybrd_sp_wrapper, 20)
 _hybrj_sp = _sig(_lib.hybrj_sp_wrapper, 18)
@@ -3778,8 +3584,6 @@ def _mesg(ier, maxfev, xtol):
     return "An error occurred."
 
 
-
-
 # --------------------------------------------------------------------------
 # THE cores.  Both entry points below only slice these returns.
 # --------------------------------------------------------------------------
@@ -3804,13 +3608,9 @@ def _core_hybrd(fp, x, a, xtol, mf, ml, mu, epsfcn, m, dd, factor, validate,
     n = x.size
     # Every evaluation of the user's residual is counted, this package's own
     # probes included, so `nfev` reports the work the callback actually did.
-    # `_wrote_residual` evaluates once; `_check_bounds` evaluates two more in
-    # `_reads_beyond`; `nextra` carries the entry point's own count.
-    nprobe = 1 + nextra
-    if not _wrote_residual(fp, x, n, a):
-        raise ValueError(
-            "the residual callback never wrote fvec. Check the "
-            "@cfunc signature and argument order")
+    # `_check_bounds` evaluates two in `_reads_beyond`; `nextra` carries the
+    # entry point's own count.
+    nprobe = nextra
     if validate:
         _check_bounds(fp, x, n, a)
         nprobe += 2
@@ -3836,10 +3636,8 @@ def _core_hybrj(fp, x, a, xtol, mf, m, dd, factor, validate, nextra):
     The `_core_hybrd` twin; see there for why the algorithm lives in a
     core rather than in the entry points. The callback ABI is the
     difference: one function serves both phases and ``iflag`` selects
-    them, so the probe checks that ``fvec`` was written at ``iflag = 1``
-    rather than that the residual was written at all. There is no
-    ``band`` or ``epsfcn`` argument either -- both belong to the
-    difference approximation this path replaces.
+    them. There is no ``band`` or ``epsfcn`` argument either -- both
+    belong to the difference approximation this path replaces.
 
     ``nextra`` is the number of residual evaluations the entry point already
     made before calling in.
@@ -3847,14 +3645,9 @@ def _core_hybrj(fp, x, a, xtol, mf, m, dd, factor, validate, nextra):
     Returns ``(x, fvec, fjac, r, qtf, nfev, njev, ier)``.
     """
     n = x.size
-    # `_wrote_jac_residual` evaluates the residual branch once; counted.
-    if not _wrote_jac_residual(fp, x, n, n * n, a):
-        raise ValueError(
-            "the callback never wrote fvec at iflag=1. The argument "
-            "order is (x, fvec, fjac, iflag, args)")
     x, fvec, fjac, r, qtf, nfev, njev, ier = _run_hybrj(
         fp, x, a, xtol, mf, m, dd, factor)
-    nfev = np.int32(nfev + 1 + nextra)
+    nfev = np.int32(nfev + nextra)
     st = 0 if ier == 0 else _jac_status(fp, x, fvec, n, n * n, a)
     if st != 0:
         if validate:
@@ -4040,10 +3833,10 @@ def fsolve(func, x0, args=(), fprime=None, full_output=False, col_deriv=0,
 
     ``nfev`` counts every evaluation of `func`, including the ones this
     package makes before the solver runs: one to read the residual count off
-    the callback, one to check that the callback writes ``fvec``, and two
-    more under ``validate=True`` for the read probe. scipy counts two of its
-    own, so ``nfev`` is two higher than scipy's on the forward-difference
-    path at ``validate=True`` and equal to it on the other three. The
+    the callback, and two more under ``validate=True`` for the read probe.
+    scipy counts two of its own, so ``nfev`` is one higher than scipy's on
+    the forward-difference path at ``validate=True`` and one lower on the
+    other three. The
     evaluation `fprime` costs for its shape check is not counted, and scipy
     does not count its own either.
 
@@ -4107,7 +3900,7 @@ def fsolve(func, x0, args=(), fprime=None, full_output=False, col_deriv=0,
     ...     return fsolve(f, np.array([0.0, 0.0]), full_output=True)
     >>> x, infodict, ier, mesg = run_full()
     >>> ier, infodict.nfev
-    (1, 16)
+    (1, 15)
     >>> mesg
     'The solution converged.'
     """

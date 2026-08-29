@@ -31,7 +31,7 @@ from scijitclass import scijitclass
 from ._lbfgsb import (fmin_l_bfgs_b, _is_none, _lbfgsb_run, _lbfgsb_bounds,
                       _lbfgsb_msg, _lbfgsb_flag, _clip_to_box, _ev_fg,
                       _ev_split, _ev_approx)
-from ._minpack import (_arg_kinds_ty, _args_types, _as_args, _mk_cfunc,
+from ._minpack import (_arg_kinds_ty, _args_types, _mk_cfunc,
                        _opt_result, _pack_args, _unpack_lines)
 from ._slsqp import (_minimize_slsqp_fg, _slsqp_run, _slsqp_bounds,
                      _no_c, _no_j, _EPSILON)
@@ -299,13 +299,6 @@ class HessInv:
             ``True`` for ``'BFGS'`` and ``'L-BFGS-B'``, ``False`` otherwise.
         """
         return self.mat.shape[0] != 0 or self.sk.shape[0] != 0
-
-
-@njit
-def _no_hess(n):
-    """The empty operator, for the methods that estimate no Hessian."""
-    return HessInv(np.zeros((0, n), np.float64), np.zeros((0, n), np.float64),
-                   np.zeros((0, 0), np.float64), np.int64(n))
 
 
 @njit
@@ -637,12 +630,6 @@ def _join_fg(pyf, pyg):
 @njit
 def _no_cons(x, *args):
     """Zero nonlinear constraints, for COBYLA on an unconstrained problem."""
-    return np.zeros(0, np.float64)
-
-
-@njit
-def _empty_jac():
-    """The `jac` field for a method that reports no gradient."""
     return np.zeros(0, np.float64)
 
 

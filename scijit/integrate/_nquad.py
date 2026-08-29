@@ -828,16 +828,6 @@ def _opt_expr(od, i, name, default, per_axis, cast=None):
     return repr(default)
 
 
-def _wvar_expr(od, i, per_axis, slot):
-    sub = "opts[%d]" % i if per_axis else "opts"
-    if od['keys'] in (None, 'triple') or 'wvar' not in od['keys']:
-        return "0.0"
-    if slot == 0:
-        return ("np.float64(%s['wvar'][0]) if _hasw%d else "
-                "np.float64(%s['wvar'])" % (sub, i, sub))
-    return ("np.float64(%s['wvar'][1]) if _hasw%d else 0.0" % (sub, i))
-
-
 def _points_expr(od, i, per_axis):
     sub = "opts[%d]" % i if per_axis else "opts"
     if not od['points']:
@@ -902,25 +892,10 @@ def _nq_args_types(args, who):
     return tuple(typeof(v) for v in _nq_args_tuple(args, who))
 
 
-def _is_none(v):
-    """True when an argument is ``None`` at TYPING time, in any spelling."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
-def _lit_bool(v):
-    """A boolean-ish argument's value at TYPING time, or ``None``."""
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
 # ---------------------------------------------------------------------

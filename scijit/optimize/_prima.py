@@ -27,15 +27,13 @@ The callback state lives in Fortran module variables carrying
 `!$omp threadprivate`, so each thread gets its own slot and concurrent
 solves are safe: these are callable from a `numba.prange` loop.
 """
-import ctypes as ct
 from collections import namedtuple
 
 from numba import carray, cfunc, njit, objmode, types
 from numba.core.errors import TypingError
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 import warnings
 
 prima_sig = types.void(types.CPointer(types.double),     # x      (in)
@@ -81,8 +79,8 @@ interchangeable and a wrong-signature address is undefined behaviour rather
 than an error.
 """
 
-from ._lbfgsb import _lit_bool, _is_none      # noqa: E402
-from ._minpack import (_as_args,              # noqa: E402
+from ._lbfgsb import _lit_bool                # noqa: E402
+from ._minpack import (                     # noqa: E402
                        _arg_kinds, _arg_kinds_ty, _args_types, _as_args_tuple,
                        _pack_args, _unpack_lines, _call_cb, _check_arity,
                        _front_pyfunc, _front_pyfunc_ty, _address_msg)
@@ -125,33 +123,7 @@ it corrupts memory silently.
 objective and its `cons`, and takes those two rather than an address.
 """
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libprima.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libprima.so"
-else:
-    _name = "/libprima.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give one PRIMA wrapper its ctypes signature.
-
-    Every ``bind(c)`` entry point in ``src/prima/wrappers.f90`` takes its
-    arguments by reference and returns nothing, so the signature is
-    always ``[c_void_p] * nargs`` with ``restype = None`` and the call
-    sites pass ``array.ctypes.data``. ``nargs`` must be recounted against
-    that file whenever a wrapper changes: a count that disagrees with the
-    call site surfaces as a cryptic numba ``ExternalFunctionPointer``
-    typing error, and a count that is wrong in both places raises nothing
-    at all and runs into undefined behaviour.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libprima")
 
 
 _uobyqa = _sig(_lib.uobyqa_wrapper, 11)
@@ -838,10 +810,7 @@ def _prepend_nm_args(args, cargs, n, m):
 # --------------------------------------------------------------------------
 
 
-def _is_none(v):
-    """``None`` at Python level or at typing time."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _as_arr1(v, fill):

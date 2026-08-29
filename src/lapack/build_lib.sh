@@ -9,9 +9,11 @@ OUT="${1:-../../scijit/_lib/liblapackref.so}"
 OBJ="$(mktemp -d)"
 FLAGS="-fPIC -O2 -fallow-argument-mismatch"
 
-# 1. modules first (sequential; emit .mod into $OBJ)
-gfortran $FLAGS -J"$OBJ" -c la_constants.f90 -o "$OBJ/la_constants.o"
-gfortran $FLAGS -J"$OBJ" -I"$OBJ" -c la_xisnan.F90 -o "$OBJ/la_xisnan.o"
+# 1. modules first (sequential; emit .mod into $OBJ). Guarded by existence:
+# the public release ships a trimmed closure that need not contain them.
+for m in la_constants.f90 la_xisnan.F90; do
+  [ -f "$m" ] && gfortran $FLAGS -J"$OBJ" -I"$OBJ" -c "$m" -o "$OBJ/$m.o" || :
+done
 
 # 2. everything else in parallel
 ls *.f *.f90 *.F *.F90 2>/dev/null \

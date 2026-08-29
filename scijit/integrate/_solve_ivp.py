@@ -648,48 +648,13 @@ def LsodaSolution(t, h, yh):
 # ---------------------------------------------------------------------------
 # compile-time helpers
 # ---------------------------------------------------------------------------
-def _lit_bool(v):
-    """The value of a boolean-ish argument at TYPING time, or ``None`` when it
-    is a runtime variable.
-
-    ``dense_output`` selects the result TYPE, so it cannot be a runtime
-    variable; ``None`` here makes the overload decline and numba raise a
-    ``TypingError``, which is the intended answer.
-    """
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _lit_str(v):
-    """The value of a string argument at TYPING time, or ``None``.
-
-    ``method`` selects which solver is compiled in, so it has to be known
-    when the call compiles.
-    """
-    if isinstance(v, str):
-        return v
-    if isinstance(v, types.StringLiteral):
-        return v.literal_value
-    if isinstance(v, types.Omitted):
-        return v.value
-    return None
+from .._lib._typing import _lit_str    # noqa: E402
 
 
-def _is_none(v):
-    """True when an argument is ``None`` at TYPING time, in any of the three
-    spellings numba hands an overload: the Python value, ``types.NoneType``,
-    or an ``Omitted`` default."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _passed(v):

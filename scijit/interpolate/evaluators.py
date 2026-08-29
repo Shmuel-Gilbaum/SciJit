@@ -75,50 +75,12 @@ rejects: a knot vector inconsistent with the degree, a grid axis that is not
 non-decreasing, an empty grid axis, too small an ``mest``. Validate before
 calling if the input is not under the caller's control.
 """
-import ctypes as ct
 from numba import njit, types
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libfitpack.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libfitpack.so"
-else:
-    _name = "/libfitpack.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give a ctypes handle the all-pointer signature the wrappers use.
-
-    Every ``*_wrapper`` in ``src/fitpack/wrappers.f90`` takes its arguments by
-    Fortran reference and returns nothing (the Fortran FUNCTIONs -- splint,
-    dblint -- are wrapped as subroutines with a ``res`` out-argument), so the
-    signature is always ``nargs`` void pointers and ``None``.
-
-    Parameters
-    ----------
-    fn : ctypes function handle
-        Symbol from the loaded shared library.
-    nargs : int
-        Argument count of the Fortran wrapper. A wrong count surfaces as a
-        cryptic numba ``ExternalFunctionPointer`` error, not a clear message
-        -- recount against ``wrappers.f90``.
-
-    Returns
-    -------
-    fn : ctypes function handle
-        The same object, mutated in place.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libfitpack")
 
 
 _splev  = _sig(_lib.splev_wrapper, 9)

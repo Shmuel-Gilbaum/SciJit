@@ -1,7 +1,5 @@
 """Adaptive numerical integration in ``@njit``, over QUADPACK."""
-import ctypes as ct
-import os
-import platform
+from .._lib._load import load
 import warnings
 
 import numpy as np
@@ -40,31 +38,7 @@ scipy publishes no name for an integrand signature.  This is a low-level
 spelling with no scipy counterpart.
 """
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libquadpack.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libquadpack.so"
-else:
-    _name = "/libquadpack.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Declare a bind(c) wrapper as ``nargs`` opaque pointers returning void.
-
-    Every Fortran argument crosses by reference, so the ctypes view is
-    uniform and every call site passes ``.ctypes.data``.  ``nargs`` must
-    match the wrapper's argument list in ``src/quadpack/wrappers.f90``.  A
-    miscount that disagrees with the call site raises; a miscount CONSISTENT
-    with the call site raises nothing and runs into undefined behaviour, so
-    recount against the Fortran rather than against a previous count.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libquadpack")
 
 
 # ---------------------------------------------------------------------
@@ -1214,48 +1188,13 @@ def _quad_core(funcptr, a, b, args, epsabs, epsrel, limit, points,
 # ---------------------------------------------------------------------
 # compile-time predicates and argument resolution
 # ---------------------------------------------------------------------
-def _lit_bool(v):
-    """The value of a boolean-ish argument at TYPING time, or ``None`` when it
-    is a runtime variable.
-
-    ``None`` means no compiled body can be chosen, because the flag selects
-    the number of return values.  The overload then declines and numba raises
-    a ``TypingError``, which is the intended outcome rather than a failure.
-    """
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _lit_str(v):
-    """The value of a string argument at TYPING time, or ``None``.
-
-    ``weight`` selects which QUADPACK routine runs, so it has to be known
-    when the call compiles.
-    """
-    if isinstance(v, str):
-        return v
-    if isinstance(v, types.StringLiteral):
-        return v.literal_value
-    if isinstance(v, types.Omitted):
-        return v.value
-    return None
+from .._lib._typing import _lit_str    # noqa: E402
 
 
-def _is_none(v):
-    """True when an argument is ``None`` at TYPING time, in any of the three
-    spellings numba hands an overload: the Python value, ``types.NoneType``,
-    or an ``Omitted`` default."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 def _weight_code(weight):

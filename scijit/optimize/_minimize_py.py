@@ -143,7 +143,6 @@ def _allvecs_list_ovl(av):
 # simplex, with matching nit and nfev.)
 
 from ._lbfgsb import _lit_bool, _is_none          # noqa: E402
-from ._minpack import _as_args                    # noqa: E402
 from ._lsq import OptimizeWarning                 # noqa: E402
 from ._callback import (_cb_noop, _cb_install, _cb_release,   # noqa: E402
                         _cb_resolve, _cb_resolve_ty,

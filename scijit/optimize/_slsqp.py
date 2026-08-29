@@ -34,42 +34,14 @@ The user supplies two @njit functions (mirroring scipy's fun/jac split):
 Problem shape (m, meq) is passed explicitly, function results cannot
 be introspected before compilation.
 """
-import ctypes as ct
 
 from numba import njit, objmode, types
 from numba.core.dispatcher import Dispatcher
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libslsqp.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libslsqp.so"
-else:
-    _name = "/libslsqp.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give the SLSQP wrapper its ctypes signature.
-
-    The ``bind(c)`` entry point in ``src/slsqp/05_wrappers.f90`` takes
-    every argument by reference and returns nothing, so the signature is
-    ``[c_void_p] * nargs`` with ``restype = None`` and the call sites
-    pass ``array.ctypes.data``. ``nargs`` must be recounted against that
-    file whenever the wrapper changes: a count that disagrees with the
-    call site surfaces as a cryptic numba ``ExternalFunctionPointer``
-    typing error, and a count that is wrong in both places raises nothing
-    at all and runs into undefined behaviour.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libslsqp")
 
 
 _slsqp = _sig(_lib.slsqp_wrapper, 26)
@@ -83,7 +55,6 @@ from ._lbfgsb import (                       # noqa: E402
     _split_bounds, _as_bounds, _lit_bool, _is_none, _BOUNDS_LEN_MSG,
     _eps_at, _check_eps, _call_args,
 )
-from ._minpack import _as_args               # noqa: E402
 from ._callback import (_cb_noop, _cb_install, _cb_release,   # noqa: E402
                         _cb_resolve, _cb_resolve_ty,
                         _cb_halt_get, _cb_halt_clear)

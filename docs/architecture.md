@@ -304,7 +304,7 @@ argument. Each is a different numba type, and Fortran needs one contiguous
 float64 buffer.
 
 **Fix.** Normalise every spelling to that buffer before the core sees it.
-`_as_x0` and `_as_args` do this, each with a small `@overload` per input type.
+`_as_x0` does this, with a small `@overload` per input type.
 
 ```python
 @njit

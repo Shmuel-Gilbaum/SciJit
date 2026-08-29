@@ -108,50 +108,14 @@ Fortran with fresh local workspaces, so they are prange-safe. ``polar``
 and ``evapol`` are prange-safe too, provided the ``rad`` function supplied is
 reentrant.
 """
-import ctypes as ct
 import warnings
 from numba import njit, objmode, cfunc, types
 from numba.core.errors import TypingError
 from numba.extending import overload
 import numpy as np
-import os
-import platform
+from .._lib._load import load
 
-rootdir = os.path.dirname(os.path.abspath(__file__))
-
-if platform.uname()[0] == "Windows":
-    _name = "\\libfitpack.dll"
-elif platform.uname()[0] == "Linux":
-    _name = "/libfitpack.so"
-else:
-    _name = "/libfitpack.dylib"
-
-_lib = ct.CDLL(rootdir + _name)
-
-
-def _sig(fn, nargs):
-    """Give a ctypes handle the all-pointer signature the wrappers use.
-
-    Every ``*_wrapper`` in ``src/fitpack/wrappers.f90`` takes its arguments by
-    Fortran reference and returns nothing.
-
-    Parameters
-    ----------
-    fn : ctypes function handle
-        Symbol from the loaded shared library.
-    nargs : int
-        Argument count of the Fortran wrapper. A wrong count surfaces as a
-        cryptic numba ``ExternalFunctionPointer`` error -- recount against
-        ``wrappers.f90``.
-
-    Returns
-    -------
-    fn : ctypes function handle
-        The same object, mutated in place.
-    """
-    fn.argtypes = [ct.c_void_p] * nargs
-    fn.restype = None
-    return fn
+_lib, _sig = load(__file__, "libfitpack")
 
 
 _curfit = _sig(_lib.curfit_wrapper, 20)

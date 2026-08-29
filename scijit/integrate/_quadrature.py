@@ -42,37 +42,10 @@ from numba.extending import overload
 # ---------------------------------------------------------------------
 # compile-time predicates, shared by the choosers below
 # ---------------------------------------------------------------------
-def _lit_bool(v):
-    """The value of a boolean-ish argument at TYPING time, or None when
-    it is a runtime variable and no compiled body can be chosen."""
-    if isinstance(v, bool):
-        return v                                  # omitted default
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral):
-        return v.literal_value
-    if isinstance(v, types.IntegerLiteral):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool    # noqa: E402
 
 
-def _is_none(v):
-    """True when an argument is ``None`` at TYPING time."""
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
-
-
-def _fn_arity(v):
-    """Number of positional parameters of a first-class ``@njit``
-    function, from a Dispatcher object (python entry) or a
-    ``types.Dispatcher`` (chooser)."""
-    if isinstance(v, types.Dispatcher):
-        py = v.dispatcher.py_func
-    else:
-        py = getattr(v, 'py_func', v)
-    return py.__code__.co_argcount
+from .._lib._typing import _is_none    # noqa: E402
 
 
 # ---------------------------------------------------------------------

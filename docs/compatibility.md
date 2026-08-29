@@ -13,7 +13,7 @@ Runtime dependencies, installed automatically with scijit:
 
 | package | requirement | why |
 |---|---|---|
-| Python | `>=3.10` | |
+| Python | `>=3.9` | |
 | `numba` | `>=0.66` | 0.66 adds the multi-dimensional fancy indexing the package uses |
 | `numpy` | numba's bound | scijit sets no bound of its own; the version is whatever the installed numba supports |
 | `scijitclass` | `>=0.1.6` | makes the jitclasses callable (`spl(x)`); see [credits](credits.md) |

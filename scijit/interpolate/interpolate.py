@@ -165,6 +165,9 @@ def _warn_fit(msg, k, n, m, fp, s):
 # the plain type is checked FIRST.
 # ---------------------------------------------------------------------
 
+from .._lib._typing import _lit_bool as _lit_bool_base    # noqa: E402
+
+
 def _lit_bool(v):
     """A numba type for a flag, reduced to a Python bool at compile time.
 
@@ -174,16 +177,17 @@ def _lit_bool(v):
     value only known at runtime cannot be served. Refusing produces a
     TypingError at the call site, which is the intended failure.
 
+    A STRING LITERAL is read here and nowhere else in the package. From
+    Python any object is taken by its truthiness, as in scipy, so the
+    compiled path accepts the same spelling: `splint-D2`, `splint-D3`,
+    `splrep-D6`, `splprep-D8`.
+
     Runs at TYPING time, not inside ``@njit``: `v` is a `numba.types`
     instance, not the value.
     """
-    if isinstance(v, bool):                 return v
-    if isinstance(v, (int, np.integer)):    return bool(v)
-    if isinstance(v, types.Omitted):        return bool(v.value)
-    if isinstance(v, types.BooleanLiteral): return v.literal_value
-    if isinstance(v, types.IntegerLiteral): return bool(v.literal_value)
-    if isinstance(v, types.StringLiteral):  return bool(v.literal_value)
-    return None                             # runtime variable -> refuse
+    if isinstance(v, types.StringLiteral):
+        return bool(v.literal_value)
+    return _lit_bool_base(v)
 
 
 def _lit_flag(v, name, where):
@@ -206,17 +210,7 @@ def _lit_flag(v, name, where):
     return b
 
 
-def _is_none(v):
-    """True when an argument was left at ``None``, in any of its three forms.
-
-    An omitted default, an explicit ``None`` and a plain Python ``None``
-    reach an ``@overload`` body as three different things: `types.Omitted`
-    wrapping ``None``, `types.NoneType`, and ``None`` itself. Every optional
-    argument in this module is decided by this one predicate so the three
-    stay indistinguishable to callers.
-    """
-    return (v is None or isinstance(v, types.NoneType)
-            or (isinstance(v, types.Omitted) and v.value is None))
+from .._lib._typing import _is_none    # noqa: E402
 
 
 _NO_T = np.empty(0, dtype=np.float64)

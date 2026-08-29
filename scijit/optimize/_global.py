@@ -433,17 +433,7 @@ def _mgrid_axis(lo, hi, Ns):
     return g
 
 
-def _lit_bool_g(v):
-    """Compile-time bool out of whatever numba hands the overload."""
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, np.integer)):
-        return bool(v)
-    if isinstance(v, types.Omitted):
-        return bool(v.value)
-    if isinstance(v, (types.BooleanLiteral, types.IntegerLiteral)):
-        return bool(v.literal_value)
-    return None
+from .._lib._typing import _lit_bool as _lit_bool_g   # noqa: E402
 
 
 def _lit_int_g(v):
@@ -1373,16 +1363,7 @@ def _bh_mk_keys(mk):
     return None
 
 
-def _is_none_g(v):
-    """True for ``None``, for ``types.NoneType`` and for an omitted ``None``.
-
-    One predicate for both worlds: the python entry hands a value, the chooser
-    hands a numba type, and an omitted default arrives as ``types.Omitted``
-    carrying the raw python value.
-    """
-    if isinstance(v, types.Omitted):
-        v = v.value
-    return v is None or isinstance(v, types.NoneType)
+from .._lib._typing import _is_none as _is_none_g    # noqa: E402
 
 
 def _bh_scope_ok(*vals):

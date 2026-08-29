@@ -157,32 +157,6 @@ def _bc_code_ovl(bc_type):
 
 
 @njit
-def _bc_from_code(code):
-    """Expand a string's int code into the six-entry resolved form."""
-    s = np.zeros(6, np.float64)
-    if code == 1:                      # natural: S'' = 0 at both ends
-        s[0] = _BC_KIND_DERIV
-        s[1] = 2.0
-        s[3] = _BC_KIND_DERIV
-        s[4] = 2.0
-    elif code == 2:                    # clamped: S' = 0 at both ends
-        s[0] = _BC_KIND_DERIV
-        s[1] = 1.0
-        s[3] = _BC_KIND_DERIV
-        s[4] = 1.0
-    elif code == 3:                    # periodic
-        s[0] = _BC_KIND_PERIODIC
-        s[3] = _BC_KIND_PERIODIC
-    return s
-
-
-@njit
-def _bc_from_pair(o0, v0, o1, v1):
-    """Build the resolved form from a per-end ``(order, value)`` pair."""
-    return _bc_join(_bc_end_pair(o0, v0), _bc_end_pair(o1, v1))
-
-
-@njit
 def _bc_end_str(name):
     """One end of `bc_type`, resolved from a string to ``[kind, order, value]``.
 

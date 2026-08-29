@@ -207,7 +207,7 @@ def run_full():
 
 x, infodict, ier, mesg = run_full()
 ier, infodict.nfev, mesg
-# -> (1, 16, 'The solution converged.')
+# -> (1, 15, 'The solution converged.')
 ```
 
 **An analytic Jacobian.** Supplying `fprime` selects the derivative driver. The
