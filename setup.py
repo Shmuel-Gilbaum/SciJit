@@ -30,11 +30,24 @@ import os
 import platform
 import subprocess
 import tempfile
-from setuptools import find_packages, setup
+from setuptools import Distribution, find_packages, setup
 from setuptools.command.build_py import build_py
 
 TOP_PACKAGE = 'scijit'
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+# Tell setuptools this distribution contains native compiled shared libraries.
+# NOT redundant with `root_is_pure = False` in the bdist_wheel subclass below:
+# root_is_pure sets the wheel TAG, has_ext_modules() decides whether files land
+# in platlib or in .data/purelib.  Removing this in 0.1.3 produced a
+# py3-none wheel whose .so files sat in purelib, and auditwheel refused it:
+#   RuntimeError: Invalid binary wheel, found the following shared
+#   library/libraries in purelib folder
+class BinaryDistribution(Distribution):
+    def has_ext_modules(self):
+        return True
+
 
 
 # (fortran pack dir under src/, python subpackage, library base name)
@@ -437,4 +450,6 @@ setup(
     # scijit. It is also the floor CI builds and tests: cp310.
     python_requires='>=3.10',
     cmdclass=custom_cmdclass,
+    distclass=BinaryDistribution,   # platlib, not purelib
+    zip_safe=False,                 # the shared libraries must be real files
 )
