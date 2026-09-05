@@ -65,7 +65,7 @@ and result types live on in their modules and are reachable there, but a
 caller reaching for one is reaching past the front end that covers it.
 """
 from ._quadpack import quad, IntegrationWarning
-from ._odeint_scipy import odeint, ODEintWarning, ODEpackError
+from ._odeint import odeint, ODEintWarning, ODEpackError
 from ._quadrature import (simpson, cumulative_simpson, romb, newton_cotes,
                           fixed_quad, trapezoid, cumulative_trapezoid)
 from ._nquad import nquad, dblquad, tplquad

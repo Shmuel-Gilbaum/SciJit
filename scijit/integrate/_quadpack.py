@@ -6,7 +6,9 @@ import numpy as np
 from numba import carray, cfunc, njit, objmode, typeof, types
 from numba.core.errors import TypingError
 from numba.extending import overload
-from .._lib._typing import _is_none, _lit_bool, _lit_str
+from .._lib._typing import _K_BOOL, _K_FLOAT, _K_INT, _is_none, _lit_bool, _lit_str
+from .._lib._typing import _arg_kinds as _arg_kinds_base
+from .._lib._typing import _arg_kinds_ty as _arg_kinds_ty_base
 
 # the internal integrand signature (RETURNS the value). PRIVATE: no public
 # routine accepts a @cfunc built against it.
@@ -115,50 +117,16 @@ _INTEGRAND_MSG = (
 #: kind codes: a float, an integer and a boolean scalar; ``k >= 1`` is an
 #: array of that rank.  A scalar keeps its own type through the buffer,
 #: which is a cast in the adapter; an array's data crosses as float64.
-_K_FLOAT, _K_INT, _K_BOOL = -1, -2, -3
 
 
 def _arg_kinds(args):
-    """Element kinds of a Python-level ``args`` tuple.
-
-    The packer writes what the kinds say and the adapter reads it back, so
-    the two halves cannot drift.
-    """
-    kinds = []
-    for v in args:
-        a = v if isinstance(v, np.ndarray) else np.asarray(v)
-        if a.dtype.kind not in 'biuf':
-            raise ValueError(_ARGS_MSG)
-        if a.ndim:
-            kinds.append(a.ndim)
-        elif a.dtype.kind == 'b':
-            kinds.append(_K_BOOL)
-        elif a.dtype.kind == 'f':
-            kinds.append(_K_FLOAT)
-        else:
-            kinds.append(_K_INT)
-    return tuple(kinds)
+    """Element kinds of a Python-level ``args`` tuple."""
+    return _arg_kinds_base(args, _ARGS_MSG)
 
 
 def _arg_kinds_ty(args):
-    """:func:`_arg_kinds` from the numba TYPE of ``args``, at typing time."""
-    kinds = []
-    for t in args:
-        t = types.unliteral(t)
-        if isinstance(t, types.Array):
-            if not isinstance(t.dtype, (types.Integer, types.Float,
-                                        types.Boolean)):
-                raise TypingError(_ARGS_MSG)
-            kinds.append(t.ndim)
-        elif isinstance(t, types.Boolean):
-            kinds.append(_K_BOOL)
-        elif isinstance(t, types.Float):
-            kinds.append(_K_FLOAT)
-        elif isinstance(t, types.Integer):
-            kinds.append(_K_INT)
-        else:
-            raise TypingError(_ARGS_MSG)
-    return tuple(kinds)
+    """Element kinds of the numba TYPES of ``args``, at typing time."""
+    return _arg_kinds_ty_base(args, _ARGS_MSG)
 
 
 def _args_types(args):

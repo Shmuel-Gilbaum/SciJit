@@ -7,8 +7,11 @@ of those shapes it arrives in. Not a public API.
 
 import numpy as np
 from numba import types
+from numba.core.errors import TypingError
 
-__all__ = ['_is_none', '_lit_bool', '_lit_str']
+__all__ = ['_is_none', '_lit_bool', '_lit_str',
+           '_K_FLOAT', '_K_INT', '_K_BOOL',
+           '_arg_kinds', '_arg_kinds_ty']
 
 
 def _lit_str(v):
@@ -71,3 +74,69 @@ def _lit_bool(v):
     if isinstance(v, types.IntegerLiteral):
         return bool(v.literal_value)
     return None
+
+
+#: kind codes for one ``args`` entry: a float, an integer and a boolean
+#: scalar. ``k >= 1`` is an array of that rank. A scalar keeps its own type
+#: through the buffer, which is a cast in the adapter; an array's data
+#: crosses as float64.
+_K_FLOAT, _K_INT, _K_BOOL = -1, -2, -3
+
+
+def _arg_kinds(args, msg):
+    """Element kinds of a Python-level ``args`` tuple.
+
+    The packer writes what the kinds say and the adapter reads it back, so
+    the two halves cannot drift.
+
+    Parameters
+    ----------
+    args : tuple
+        The entries to classify.
+    msg : str
+        Text of the ``ValueError`` raised for a non-numeric entry. Each
+        front end names its own pack's argument slot.
+    """
+    kinds = []
+    for v in args:
+        a = v if isinstance(v, np.ndarray) else np.asarray(v)
+        if a.dtype.kind not in 'biuf':
+            raise ValueError(msg)
+        if a.ndim:
+            kinds.append(a.ndim)
+        elif a.dtype.kind == 'b':
+            kinds.append(_K_BOOL)
+        elif a.dtype.kind == 'f':
+            kinds.append(_K_FLOAT)
+        else:
+            kinds.append(_K_INT)
+    return tuple(kinds)
+
+
+def _arg_kinds_ty(tys, msg):
+    """:func:`_arg_kinds` from the numba TYPES of ``args``, at typing time.
+
+    Parameters
+    ----------
+    tys : tuple of numba types
+        The entry types to classify.
+    msg : str
+        Text of the ``TypingError`` raised for a non-numeric entry.
+    """
+    kinds = []
+    for t in tys:
+        t = types.unliteral(t)
+        if isinstance(t, types.Array):
+            if not isinstance(t.dtype, (types.Integer, types.Float,
+                                        types.Boolean)):
+                raise TypingError(msg)
+            kinds.append(t.ndim)
+        elif isinstance(t, types.Boolean):
+            kinds.append(_K_BOOL)
+        elif isinstance(t, types.Float):
+            kinds.append(_K_FLOAT)
+        elif isinstance(t, types.Integer):
+            kinds.append(_K_INT)
+        else:
+            raise TypingError(msg)
+    return tuple(kinds)

@@ -13,7 +13,7 @@ import numpy as np
 from numba import njit
 
 from ._ivp import rk_dense_eval
-from ._odeint_scipy import lsoda_dense_eval
+from ._odepack import lsoda_dense_eval
 
 #: History kinds, so one scan can read either engine's arrays.
 KIND_RK = 0

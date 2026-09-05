@@ -16,13 +16,13 @@ from scijitclass import scijitclass, sig, Scalar, ArrayOf
 
 from ._ivp import (METHOD_RK45, METHOD_RK23, METHOD_DOP853, _rk_core,
                    rk_dense_eval, _NO_ARGS, _check_teval, _RTOL_SHAPE_MSG)
-from ._odeint_scipy import (_adapter_rhs, _prepend_neq, _msg, _run_odeint,
-                            _wrote_ydot_t, _run_lsoda_dense,
-                            _lsoda_dense_work,
-                            lsoda_dense_eval, _rhs_arity,
-                            _py_func_of, _jac_route, _adapter_jac,
-                            _jac_arity, _check_jac_shape_full,
-                            _check_jac_shape_band)
+from ._odepack import (_adapter_rhs, _prepend_neq, _msg, _run_odeint,
+                       _run_lsoda_dense, _lsoda_dense_work,
+                       lsoda_dense_eval, _rhs_arity,
+                       _py_func_of, _jac_route, _adapter_jac,
+                       _jac_arity, _check_jac_shape_full,
+                       _check_jac_shape_band)
+from .._probe import wrote_ydot as _wrote_ydot_t
 from ._events import (scan_events, split_events, truncate_at,
                       KIND_RK, KIND_LSODA)
 from .._lib._typing import _is_none, _lit_bool, _lit_str
@@ -65,7 +65,7 @@ _RK_ARGS_MSG = (
     "parameters have nowhere to go. Write f(t, y, args) and read them as "
     "args[i], or close over them and drop args=")
 
-#: The same mismatch on the LSODA route. `_odeint_scipy._ARGS_MSG` covers this
+#: The same mismatch on the LSODA route. `_odeint._ARGS_MSG` covers this
 #: case for `odeint`, whose rhs is `f(y, t)`, so it names the arguments in the
 #: opposite order and cannot be reused here.
 _IVP_ARGS_MSG = _RK_ARGS_MSG

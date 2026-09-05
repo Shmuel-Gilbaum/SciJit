@@ -51,7 +51,7 @@ from numba.core.errors import TypingError
 from numba.extending import intrinsic
 
 from ._minpack import _opt_result
-from .._lib._typing import _is_none as _is_none_v
+from .._lib._typing import _is_none
 
 __all__ = []
 
@@ -389,7 +389,7 @@ def _cb_resolve_ty(name, callback, bh=False, de=False):
     `de` takes the same ``@njit`` shape as the default protocol, so it only
     selects the message; the Python-only halting rules live in `_de_invoke`.
     """
-    if _is_none_v(callback):
+    if _is_none(callback):
         return (_bh_noop if bh else _cb_noop), False
     if isinstance(callback, types.Dispatcher):
         return (_bh_wrap_njit(callback.dispatcher) if bh

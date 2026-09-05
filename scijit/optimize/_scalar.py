@@ -133,7 +133,7 @@ from numba.core.errors import TypingError
 from numba.extending import overload
 
 from ._minpack import OptimizeResult, _opt_result
-from .._lib._typing import _is_none as _is_none_ty
+from .._lib._typing import _is_none
 
 # scipy.optimize._zeros_py defaults
 _EPS = 2.220446049250313e-16          # np.finfo(float).eps
@@ -1095,7 +1095,7 @@ def _brack_args_ovl(brack):
     wrong length is refused when the call compiles rather than when it runs,
     which is the only difference from the Python body.
     """
-    if _is_none_ty(brack):
+    if _is_none(brack):
         def impl(brack):
             return 0.0, 1.0, 0.0, False
         return impl
@@ -4565,13 +4565,13 @@ def _root_scalar_ovl(f, args=(), method=None, bracket=None, fprime=None,
     ``bracket is not None``. A `bracket` that is neither is refused when the
     call compiles rather than when it runs.
     """
-    if not (_is_none_ty(bracket)
+    if not (_is_none(bracket)
             or isinstance(bracket, (types.BaseTuple, types.Array))):
         raise TypingError(
             "root_scalar: bracket must be None, a tuple of two floats or an "
             "array. A python list is not typeable as an argument to compiled "
             "code; use a tuple.")
-    if _is_none_ty(bracket):
+    if _is_none(bracket):
         def impl(f, args=(), method=None, bracket=None, fprime=None,
                  fprime2=None, x0=None, x1=None, xtol=None, rtol=None,
                  maxiter=None, validate=False):
@@ -4888,13 +4888,13 @@ def _minimize_scalar_ovl(fun, bracket=None, bounds=None, args=(),
     rather than when it runs.
     """
     for arg, nm in ((bracket, 'bracket'), (bounds, 'bounds')):
-        if not (_is_none_ty(arg)
+        if not (_is_none(arg)
                 or isinstance(arg, (types.BaseTuple, types.Array))):
             raise TypingError(
                 "minimize_scalar: %s must be None, a tuple of floats or an "
                 "array. A python list is not typeable as an argument to "
                 "compiled code; use a tuple." % nm)
-    has_bounds = not _is_none_ty(bounds)
+    has_bounds = not _is_none(bounds)
     mt = method.value if isinstance(method, types.Omitted) else method
     if isinstance(mt, types.StringLiteral):
         NAME = mt.literal_value
@@ -4916,7 +4916,7 @@ def _minimize_scalar_ovl(fun, bracket=None, bounds=None, args=(),
         # `none`, and the caller then fails on the return type instead of
         # showing the message. An ARRAY's length is not known here, and that
         # one stays a run-time `ValueError` in the core.
-        if _is_none_ty(bounds):
+        if _is_none(bounds):
             raise TypingError(_MS_BOUNDS_MANDATORY_MSG)
         if isinstance(bounds, types.BaseTuple) and bounds.count != 2:
             raise TypingError(_MS_BOUNDS_TWO_MSG)

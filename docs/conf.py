@@ -3,7 +3,8 @@
 # Build locally:
 #     PYTHONPATH=<repo> python -m sphinx -b html -W --keep-going docs _build
 #
-# Hosted on Read the Docs via ../.readthedocs.yaml.
+# Hosted on GitHub Pages, built by .github/workflows/docs.yml in the
+# public tree.
 
 import os
 import sys
@@ -20,7 +21,7 @@ copyright = "2026, Shmuel Gilbaum"
 # The dev tree and the public release carry different versions. The
 # projection rewrites the `release` line below; keep it on one line so
 # that stays simple.
-release = "0.1.3"
+release = "0.1.4"
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ----------------------------------------------------
@@ -54,7 +55,7 @@ autodoc_default_options = {
 autodoc_typehints = "none"
 
 # autodoc does a REAL import, so the jitclass and dispatcher docstrings are
-# introspected. .readthedocs.yaml installs gfortran and builds the libraries.
+# introspected. .github/workflows/docs.yml installs gfortran and builds the libraries.
 
 # -- MyST / source --------------------------------------------------------------
 

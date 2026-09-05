@@ -23,8 +23,7 @@ from collections import namedtuple
 import numpy as np
 from numba import carray, cfunc, njit, objmode, types
 from numba.core.errors import TypingError
-from numba.extending import intrinsic, overload
-import llvmlite.ir as ir
+from numba.extending import overload
 
 from ._lapack import qr_pivot as _qr_pivot
 from ._lapack import solve_triangular as _solve_triangular
@@ -32,43 +31,6 @@ from .._lib._typing import _is_none
 from ._minpack import (leastsq, minpack_sig,  # noqa: F401
                        LsqInfo, _lit_bool, _leastsq_ptr, _address_msg,
                        _check_arity, _opt_result)
-
-
-@intrinsic
-def _call_resid(typingctx, fn_addr, xp, fp, ap):
-    """Call a ``@cfunc(minpack_sig)`` through its raw address.
-
-    ``curve_fit`` rebuilds the Jacobian by finite differences at the
-    solution, which means evaluating the user residual from inside
-    ``@njit`` -- and a ``@cfunc`` address is an integer there, not
-    something numba will call. The generated code casts the address to
-    ``void (*)(double*, double*, double*)`` and passes the three buffers
-    as ``intp`` data pointers, in MINPACK's order: ``x`` in, ``fvec``
-    out, ``args`` in.
-    """
-    signature = types.void(types.intp, types.intp, types.intp, types.intp)
-
-    def codegen(context, builder, sg, args):
-        fnaddr, p0, p1, p2 = args
-        dp = ir.DoubleType().as_pointer()
-        fnty = ir.FunctionType(ir.VoidType(), [dp, dp, dp])
-        fptr = builder.inttoptr(fnaddr, fnty.as_pointer())
-        builder.call(fptr, [builder.inttoptr(p0, dp),
-                            builder.inttoptr(p1, dp),
-                            builder.inttoptr(p2, dp)])
-        return context.get_dummy_value()
-
-    return signature, codegen
-
-
-@njit
-def _resid_eval(resid_ptr, p, args, m):
-    """Evaluate the user residual fvec (length m) at parameters p."""
-    fvec = np.zeros(m, np.float64)
-    p_ = np.ascontiguousarray(np.asarray(p, np.float64))
-    a_ = np.ascontiguousarray(np.asarray(args, np.float64))
-    _call_resid(resid_ptr, p_.ctypes.data, fvec.ctypes.data, a_.ctypes.data)
-    return fvec
 
 
 # --- shared: least squares on a column subset of A -----------------------

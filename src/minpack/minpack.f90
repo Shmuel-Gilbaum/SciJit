@@ -1703,7 +1703,17 @@ contains
                             do i = 1, j
                                 sum = sum + Fjac(i, j)*(Qtf(i)/fnorm)
                             end do
-                            gnorm = max(gnorm, abs(sum/Wa2(l)))
+                            ! NaN-SAFE MAX.  Fortran `max` with a NaN operand is
+                            ! processor-dependent; gfortran lowers it to x86
+                            ! `maxsd`, which returns its SECOND operand when
+                            ! either is NaN.  One non-finite residual then
+                            ! poisons gnorm and the `gnorm <= Gtol` test below
+                            ! can never fire, so lmdif runs to maxfev and
+                            ! reports Info=5 where scipy reports 4.  IEEE
+                            ! maxNum keeps the FIRST operand, which is what
+                            ! this branch does.  Identical for finite values.
+                            if (abs(sum/Wa2(l)) > gnorm) &
+                                gnorm = abs(sum/Wa2(l))
                         end if
                     end do
                 end if
@@ -2175,7 +2185,17 @@ contains
                             do i = 1, j
                                 sum = sum + Fjac(i, j)*(Qtf(i)/fnorm)
                             end do
-                            gnorm = max(gnorm, abs(sum/Wa2(l)))
+                            ! NaN-SAFE MAX.  Fortran `max` with a NaN operand is
+                            ! processor-dependent; gfortran lowers it to x86
+                            ! `maxsd`, which returns its SECOND operand when
+                            ! either is NaN.  One non-finite residual then
+                            ! poisons gnorm and the `gnorm <= Gtol` test below
+                            ! can never fire, so lmdif runs to maxfev and
+                            ! reports Info=5 where scipy reports 4.  IEEE
+                            ! maxNum keeps the FIRST operand, which is what
+                            ! this branch does.  Identical for finite values.
+                            if (abs(sum/Wa2(l)) > gnorm) &
+                                gnorm = abs(sum/Wa2(l))
                         end if
                     end do
                 end if
@@ -2880,7 +2900,17 @@ contains
                             do i = 1, j
                                 sum = sum + Fjac(i, j)*(Qtf(i)/fnorm)
                             end do
-                            gnorm = max(gnorm, abs(sum/Wa2(l)))
+                            ! NaN-SAFE MAX.  Fortran `max` with a NaN operand is
+                            ! processor-dependent; gfortran lowers it to x86
+                            ! `maxsd`, which returns its SECOND operand when
+                            ! either is NaN.  One non-finite residual then
+                            ! poisons gnorm and the `gnorm <= Gtol` test below
+                            ! can never fire, so lmdif runs to maxfev and
+                            ! reports Info=5 where scipy reports 4.  IEEE
+                            ! maxNum keeps the FIRST operand, which is what
+                            ! this branch does.  Identical for finite values.
+                            if (abs(sum/Wa2(l)) > gnorm) &
+                                gnorm = abs(sum/Wa2(l))
                         end if
                     end do
                 end if

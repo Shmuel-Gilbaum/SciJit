@@ -129,7 +129,7 @@ from ._callback import (_bh_noop, _cb_noop, _cb_install, _cb_release,
 # optimize without stats. FUTURE WORK: re-import from `..stats._qmc` when
 # stats ships publicly, and delete `optimize/_qmc.py`.
 from ._qmc import halton as _qmc_halton, sobol as _qmc_sobol
-from .._lib._typing import _is_none as _is_none_g, _lit_bool as _lit_bool_g
+from .._lib._typing import _is_none, _lit_bool
 
 
 @njit
@@ -879,7 +879,7 @@ def _brute_ovl(func, ranges, args=(), Ns=20, full_output=0, finish=fmin,
     reports as a TypingError naming the argument that could not be
     served.
     """
-    fo = _lit_bool_g(full_output)
+    fo = _lit_bool(full_output)
     w = _lit_int_g(workers)
     # Declining by `return None` reports a failed dispatch that lists every
     # argument type and points at none of them.  Raising the python body's own
@@ -1625,7 +1625,7 @@ def _basinhopping_ovl(func, x0, niter=100, T=1.0, stepsize=0.5,
     rt_keys = keys == []
     has_method = mk_none is False and 'method' in (keys or ())
     has_jac = keys is not None and 'jac' in keys
-    ns_none = _is_none_g(niter_success)
+    ns_none = _is_none(niter_success)
 
     def impl(func, x0, niter=100, T=1.0, stepsize=0.5, minimizer_kwargs=None,
              take_step=None, accept_test=None, callback=None, interval=50,

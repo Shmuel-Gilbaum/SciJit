@@ -97,7 +97,7 @@ OPENMP_PACKS = {'minpack', 'prima', 'quadpack', 'odepack'}
 
 
 def lib_name(base):
-    system = platform.uname()[0]
+    system = platform.system()
     if system == 'Windows':
         return base + '.dll'
     if system == 'Linux':
@@ -110,7 +110,7 @@ def _rpath_flag(from_dir, to_dir):
     path relative to its own location (so an installed wheel is
     relocatable). $ORIGIN on Linux, @loader_path on macOS."""
     rel = os.path.relpath(to_dir, from_dir)
-    system = platform.uname()[0]
+    system = platform.system()
     if system == 'Darwin':
         return ['-Wl,-rpath,' + os.path.join('@loader_path', rel)]
     if system == 'Windows':
@@ -143,7 +143,7 @@ def runtime_flags():
     build instead -- `auditwheel repair` copies it into scijit.libs/ and
     rewrites RPATH, which is what every scientific manylinux wheel does.
     """
-    system = platform.uname()[0]
+    system = platform.system()
     if system == 'Linux':
         return []
     flags = ['-static-libgfortran', '-static-libgcc']
@@ -174,7 +174,7 @@ def install_name_flag(out):
     """macOS: stamp the library's own id as @rpath/<name> so that consumers
     record a relocatable dependency instead of the absolute build path, and
     the @loader_path rpath from _rpath_flag() is actually consulted."""
-    if platform.uname()[0] == 'Darwin':
+    if platform.system() == 'Darwin':
         return ['-Wl,-install_name,@rpath/' + os.path.basename(out)]
     return []
 
@@ -211,7 +211,7 @@ def build_shared_lib(srcdir, out, n_prelude):
         fh.write('\n'.join('"%s"' % o.replace('\\', '/') for o in objs))
     link = ['gfortran', '-shared', '-o', out, '@' + rsp]
 
-    system = platform.uname()[0]
+    system = platform.system()
     link += runtime_flags()            # no libgfortran/libquadmath dependency
     link += install_name_flag(out)     # macOS: id = @rpath/liblapackref.dylib
 
@@ -270,7 +270,7 @@ class BuildFortran(build_py):
             if pack in OPENMP_PACKS:
                 cmd.append('-fopenmp')
 
-            system = platform.uname()[0]
+            system = platform.system()
             cmd += runtime_flags()         # no libgfortran/libquadmath dependency
             cmd += install_name_flag(out)  # macOS: id = @rpath/lib<pack>.dylib
 
@@ -380,7 +380,7 @@ for _, subpkg, libbase, _ in SHARED_LIBS:
     
 setup(
     name='scijit',
-    version='0.1.3',
+    version='0.1.4',
     author='Shmuel Gilbaum',
     author_email='s.gilbaum@gmail.com',
     url='https://github.com/shmuel-gilbaum/SciJit',

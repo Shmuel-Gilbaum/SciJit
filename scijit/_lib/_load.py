@@ -13,13 +13,8 @@ __all__ = ['load']
 
 # liblinalg, liboptlapack, libarpack and libpropack link against liblapackref,
 # which lives here in scijit/_lib. On Linux and macOS an rpath resolves it. On
-# Windows (Python 3.8+) the loader no longer searches PATH for a dependent DLL,
-# so that directory is registered once, here, where its path is known without
-# counting levels up from a caller.
-if platform.uname()[0] == "Windows":
-    _libdir = os.path.dirname(os.path.abspath(__file__))
-    if os.path.isdir(_libdir):
-        os.add_dll_directory(_libdir)
+# Windows the directory is registered by the .dll walk in scijit/__init__.py,
+# which runs before any subpackage imports.
 
 
 def _sig(fn, nargs):
@@ -47,7 +42,7 @@ def load(caller_file, libname):
         The library's base name with no extension, such as ``'libfitpack'``.
     """
     rootdir = os.path.dirname(os.path.abspath(caller_file))
-    system = platform.uname()[0]
+    system = platform.system()
     if system == "Windows":
         ext = ".dll"
     elif system == "Linux":
