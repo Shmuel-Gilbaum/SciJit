@@ -1008,7 +1008,8 @@
 
         mode = 6
         do i = 1 , mc
-            if ( abs(c(i,i))<epmach ) return
+            ! NaN-safe; scipy spells it the same way (slsqp.c:688).
+            if (.not. (abs(c(i,i))>=epmach)) return
             x(i) = (d(i)-ddot(i-1,c(i,1),lc,x,1))/c(i,i)
         end do
         mode = 1
@@ -1757,7 +1758,11 @@
 
         ! determine the pseudorank, k, using the tolerance, tau.
         do j=1,ldiag
-            if (abs(a(j,j))<=tau) exit
+            ! NaN-SAFE RANK TEST: `NaN <= tau` is false, which declared a
+            ! NaN diagonal FULL RANK.  Negated form treats it as deficient,
+            ! which is what LAPACK dgelsy reports (krank < n) and what
+            ! scipy therefore returns.
+            if (.not. (abs(a(j,j))>tau)) exit
         end do
         k=j-1
         kp1=j
@@ -1932,7 +1937,8 @@
                     sm = sm + c(i3)*u(1,i)
                     i3 = i3 + ice
                 end do
-                if ( abs(sm)>zero ) then
+                ! NaN-safe, as at the ldl guard below.
+                if ( sm/=zero ) then
                     sm = sm*b
                     c(i2) = c(i2) + sm*up
                     do i = l1 , m
@@ -2044,7 +2050,12 @@
     integer :: i , ij , j
     real(wp) :: t , v , u , tp , beta , alpha , delta , gamma
 
-    if ( abs(sigma)>zero ) then
+    ! NaN-SAFE GUARD.  `abs(NaN) > 0` is FALSE, so ldl returned doing
+    ! nothing and the factor never left the identity.  The original F77
+    ! (slsqp_optmz.f:1556) and scipy's C (slsqp.c:947) both test
+    ! `sigma == 0`, which is FALSE for NaN and performs the update.
+    ! Identical for every finite value, +-inf and -0.0.
+    if ( sigma/=zero ) then
         ij = 1
         t = one/sigma
         if ( sigma<=zero ) then

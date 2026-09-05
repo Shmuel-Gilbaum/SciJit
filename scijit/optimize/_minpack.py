@@ -1758,7 +1758,10 @@ def _fmt6(v):
 @njit
 def _lsq_mesg(ier, ftol, xtol, gtol, maxfev):
     """scipy's ``leastsq`` message strings, verbatim, plus ``-1``/``-2``."""
-    if ier == -1:
+    if ier == -3:
+        return ("The residual is not finite at the reported solution, so the "
+                "fit did not converge and the result is meaningless.")
+    elif ier == -1:
         return ("The residual is identically zero, so every point is a "
                 "solution and this result is meaningless.")
     elif ier == -2:
@@ -1832,7 +1835,10 @@ def _core_lmdif(fp, x, a, m, ftol, xtol, gtol, mf, epsfcn, mode, dd, factor,
     # no solution to classify.  scipy reports it the same way.
     st = 0 if ier == 0 else _resid_status(fp, x, fvec, m, a)
     if st != 0:
-        if validate:
+        # status 3 (non-finite residual) REPORTS rather than raises, even
+        # under `validate`: scipy returns popt/pcov here without raising
+        # (measured 2026-07-28) and `curve_fit` keeps that parity.
+        if validate and st != 3:
             raise ValueError(_lsq_mesg(-st, ftol, xtol, gtol, mf))
         ier = np.int32(-st)
     return x, fvec, fjac, ipvt, qtf, nfev, ier
@@ -1866,7 +1872,7 @@ def _core_lmder(fp, x, a, m, ftol, xtol, gtol, mf, mode, dd, factor, validate):
     nfev = np.int32(nfev + 1)
     st = 0 if ier == 0 else _jac_status(fp, x, fvec, m, m * n, a)
     if st != 0:
-        if validate:
+        if validate and st != 3:      # see _core_lmdif
             raise ValueError(_lsq_mesg(-st, ftol, xtol, gtol, mf))
         ier = np.int32(-st)
     return x, fvec, fjac, ipvt, qtf, nfev, njev, ier
@@ -1906,6 +1912,30 @@ def _root_warn_cb(method):
     """
     with objmode():
         _emit_root_cb_warning(method)
+
+
+def _emit_lsq_nonfinite_warning():
+    # `OptimizeWarning` lives in `_lsq`, which imports THIS module, so the
+    # import is function-local to avoid the cycle. This body runs in the
+    # interpreter (objmode), where a local import costs nothing after the
+    # first call.
+    from ._lsq import OptimizeWarning
+    warnings.warn(_lsq_mesg.py_func(-3, 0.0, 0.0, 0.0, 0),
+                  OptimizeWarning, stacklevel=2)
+
+
+@njit
+def _lsq_warn_nonfinite(ier):
+    """``OptimizeWarning`` on a bare call that got `ier = -3`.
+
+    A non-finite residual does not raise (see `_core_lmdif`), so on a
+    ``full_output=False`` call the caller never sees `ier` and would read an
+    unconverged fit as a converged one. scipy has no counterpart: it reports
+    one of its own success codes here.
+    """
+    if ier == -3:
+        with objmode():
+            _emit_lsq_nonfinite_warning()
 
 
 @njit
@@ -2069,6 +2099,14 @@ def leastsq(func, x0, args=(), Dfun=None, full_output=False, col_deriv=False,
     ``ier = 0`` raises ``TypeError('Improper input parameters.')``, scipy's
     class and scipy's text.
 
+    ``ier = -3`` reports a residual that is not finite at the solution the
+    solver returned. scipy has no such code. It reports ``ier = 4``, one of
+    its four success codes, for a fit that never left `x0`. The call does
+    not raise, `x` comes back unchanged, and a call without `full_output`
+    warns with `OptimizeWarning`, since `ier` is not visible there.
+    ``ier = -1`` and ``ier = -2`` are the other codes with no scipy
+    counterpart; both raise under ``validate=True``.
+
     ``args=None`` raises. scipy reads it as the one-item tuple ``(None,)``
     and calls ``f(x, None)``, and ``None`` is not a real number.
 
@@ -2140,6 +2178,7 @@ def leastsq(func, x0, args=(), Dfun=None, full_output=False, col_deriv=False,
         if not full_output:
             _lsq_raise_bad(ier)
             _lsq_warn_bad(ier, ftol, xtol, gtol, mf)
+            _lsq_warn_nonfinite(ier)
             return x, int(ier)
         return (x, _lsq_cov(fjac, ipvt, n, ier),
                 LsqInfo(fvec, nfev, fjac, ipvt, qtf),
@@ -2162,6 +2201,7 @@ def leastsq(func, x0, args=(), Dfun=None, full_output=False, col_deriv=False,
     if not full_output:
         _lsq_raise_bad(ier)
         _lsq_warn_bad(ier, ftol, xtol, gtol, mf)
+        _lsq_warn_nonfinite(ier)
         return x, int(ier)
     return (x, _lsq_cov(fjac, ipvt, n, ier),
             LsqInfoJ(fvec, nfev, njev, fjac, ipvt, qtf),
@@ -2281,6 +2321,7 @@ def _leastsq_ovl(func, x0, args=(), Dfun=None, full_output=False,
                         _lsq_mesg(ier, ftol, xtol, gtol, mf), ier)
             _lsq_raise_bad(ier)
             _lsq_warn_bad(ier, ftol, xtol, gtol, mf)
+            _lsq_warn_nonfinite(ier)
             return x, ier
         return impl
 
@@ -2321,6 +2362,7 @@ def _leastsq_ovl(func, x0, args=(), Dfun=None, full_output=False,
                     _lsq_mesg(ier, ftol, xtol, gtol, mf), ier)
         _lsq_raise_bad(ier)
         _lsq_warn_bad(ier, ftol, xtol, gtol, mf)
+        _lsq_warn_nonfinite(ier)
         return x, ier
     return impl
 
@@ -3513,12 +3555,17 @@ def _diag_given(diagarr, n, mode):
 
 @njit
 def _mesg(ier, maxfev, xtol):
-    """scipy's message strings, verbatim, plus the two scijit-only codes.
+    """scipy's message strings, verbatim, plus the three scijit-only codes.
 
     ``-1``/``-2`` diverge from scipy deliberately: scipy reports ``ier=1``,
     "The solution converged", for a residual that is zero everywhere.
+    ``-3`` reports a non-finite residual, where scipy reports its own
+    ``ier = 5``.
     """
-    if ier == -1:
+    if ier == -3:
+        return ("The residual is not finite at the reported solution, so the "
+                "solve did not converge and the result is meaningless.")
+    elif ier == -1:
         return ("The residual is identically zero, so every point is a root "
                 "and this result is meaningless.")
     elif ier == -2:
@@ -3583,7 +3630,10 @@ def _core_hybrd(fp, x, a, xtol, mf, ml, mu, epsfcn, m, dd, factor, validate,
     # scipy reports ier = 0, "Improper input parameters were entered."
     st = 0 if ier == 0 else _resid_status(fp, x, fvec, n, a)
     if st != 0:
-        if validate:
+        # status 3 (non-finite residual) REPORTS rather than raises, as in
+        # `_core_lmdif`. scipy does not raise here either: it returns its own
+        # ier = 5 and, on a bare call, warns.
+        if validate and st != 3:
             raise ValueError(_mesg(-st, mf, xtol))
         ier = np.int32(-st)
     return x, fvec, fjac, r, qtf, nfev, ier
@@ -3610,7 +3660,7 @@ def _core_hybrj(fp, x, a, xtol, mf, m, dd, factor, validate, nextra):
     nfev = np.int32(nfev + nextra)
     st = 0 if ier == 0 else _jac_status(fp, x, fvec, n, n * n, a)
     if st != 0:
-        if validate:
+        if validate and st != 3:      # see _core_hybrd
             raise ValueError(_mesg(-st, mf, xtol))
         ier = np.int32(-st)
     return x, fvec, fjac, r, qtf, nfev, njev, ier
@@ -3655,9 +3705,14 @@ def _hybrd_warn_bad(ier, maxfev, xtol):
     ``-W`` and ``PYTHONWARNINGS`` all select it normally. The block takes
     the GIL and is reached only on a non-converged bare call. `ier = 0`
     still raises through `_hybrd_raise_bad`, and the scijit-only ``-1``
-    and ``-2`` are left alone.
+    and ``-2`` are left alone because they RAISE under ``validate``, so
+    they never reach a caller silently.
+
+    ``-3`` IS included: a non-finite residual reports rather than raises,
+    so a bare call would otherwise return `x` with nothing to read. scipy
+    warns here too, from its own ``ier = 5``.
     """
-    if ier == 2 or ier == 3 or ier == 4 or ier == 5:
+    if ier == 2 or ier == 3 or ier == 4 or ier == 5 or ier == -3:
         with objmode():
             _emit_hybrd_warning(ier, maxfev, xtol)
 

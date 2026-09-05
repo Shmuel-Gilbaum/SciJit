@@ -1756,6 +1756,25 @@ def _emit_pcov_warning():
     warnings.warn(_CF_MSG_PCOV, OptimizeWarning, stacklevel=2)
 
 
+#: Emitted where the solver reports a non-finite residual at the solution
+#: (`ier = -3`). scipy has no counterpart: it reports one of its own success
+#: codes here, so this warning is a deliberate addition, not a port.
+_CF_MSG_NONFINITE = ("The residual is not finite at the reported solution, so "
+                     "the fit did not converge. popt is the initial guess and "
+                     "pcov could not be estimated.")
+
+
+def _emit_nonfinite_warning():
+    warnings.warn(_CF_MSG_NONFINITE, OptimizeWarning, stacklevel=2)
+
+
+@njit
+def _warn_nonfinite():
+    """Warn on `ier = -3`; see `_warn_pcov` for why this needs objmode."""
+    with objmode():
+        _emit_nonfinite_warning()
+
+
 @njit
 def _warn_pcov():
     """Warn exactly where scipy warns: ``pcov`` left all-inf.
@@ -2583,6 +2602,13 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
 
     Notes
     -----
+    A model whose residual is not finite at the fit reports ``ier = -3``
+    and issues :class:`OptimizeWarning`. scipy reports ``ier = 4``, one of
+    its four success codes, for the same fit. What the two share is the
+    rest of the return: no exception, `popt` equal to `p0`, and an all-inf
+    `pcov`, because a non-finite residual is an unestimable covariance
+    rather than an error.
+
     `bounds`, `method` and `jac` are accepted only at their defaults.
     `bounds`, and ``method='trf'`` or ``'dogbox'``, select the nonlinear
     ``least_squares`` this package does not have. ``method='lm'`` and `jac`
@@ -2727,7 +2753,13 @@ def curve_fit(f, xdata, ydata, p0=None, sigma=None, absolute_sigma=False,
         fp, p0, ab, yd.size, tol if ftol is None else ftol,
         tol if xtol is None else xtol, gtol, maxfev, epsfcn, factor, diag,
         bool(absolute_sigma), m0)
-    if ier not in (1, 2, 3, 4):
+    if ier == -3:
+        # A non-finite residual is an UNCONVERGED fit, not an error:
+        # scipy returns popt/pcov here without raising (measured
+        # 2026-07-28), so parity is kept and the caller is warned instead
+        # of being told, by a success code, that the fit worked.
+        _emit_nonfinite_warning()
+    elif ier not in (1, 2, 3, 4):
         raise RuntimeError(_CF_MSG_IER + mesg)
     if full_output:
         return popt, pcov, info, mesg, ier
@@ -2862,7 +2894,9 @@ def _curve_fit_ovl(f, xdata, ydata, p0=None, sigma=None,
         popt, pcov, info, mesg, ier = _cf_core(
             fp, pf, ab_buf, yd.size, ft, xt, gtol, maxfev, epsfcn, factor,
             diag, absolute_sigma, m0)
-        if ier < 1 or ier > 4:
+        if ier == -3:                       # see the python body
+            _warn_nonfinite()
+        elif ier < 1 or ier > 4:
             raise RuntimeError(_CF_MSG_IER + mesg)
         if fo:
             return popt, pcov, info, mesg, ier

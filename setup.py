@@ -380,7 +380,7 @@ for _, subpkg, libbase, _ in SHARED_LIBS:
     
 setup(
     name='scijit',
-    version='0.1.4',
+    version='0.1.5',
     author='Shmuel Gilbaum',
     author_email='s.gilbaum@gmail.com',
     url='https://github.com/shmuel-gilbaum/SciJit',

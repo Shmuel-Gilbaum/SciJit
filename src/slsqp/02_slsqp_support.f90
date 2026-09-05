@@ -264,7 +264,11 @@
         ! auxiliary routine:
         ! call dlassq( n, x, incx, scale, ssq )
         do ix = 1 , 1 + (n-1)*incx , incx
-            if ( abs(x(ix))>zero ) then
+            ! NaN-SAFE: skipping NaN components made dnrm2 of an all-NaN
+            ! vector return exactly 0.0, so check_convergence read 0 < acc
+            ! and reported SUCCESS on a diverged run.  Reference BLAS uses
+            ! `X(IX).NE.ZERO` and returns NaN.
+            if ( x(ix)/=zero ) then
                 absxi = abs(x(ix))
                 if ( scale<absxi ) then
                     ssq = one + ssq*(scale/absxi)**2

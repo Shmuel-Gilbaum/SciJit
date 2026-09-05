@@ -297,7 +297,8 @@ def _eval_resid(fn_addr, x, nout, args):
 
 @njit
 def residual_status(fn_addr, xstar, fstar, nout, args):
-    """Classify the returned solution.  0 ok, 1 degenerate, 2 inconsistent.
+    """Classify the returned solution.  0 ok, 1 degenerate, 2 inconsistent,
+    3 non-finite.
 
     Three stages, cheapest first:
 
@@ -312,6 +313,14 @@ def residual_status(fn_addr, xstar, fstar, nout, args):
     3. Fresh value also zero: perturb one component at a time.  All zero
        again means the residual carries no information (status 1).
     """
+    # A NON-FINITE residual is status 3.  This scan must come FIRST:
+    # `NaN != 0.0` is TRUE, so the nonzero test below returns 0 ("ok")
+    # on the first element of an all-NaN residual, which is how a
+    # diverged fit was reported as a converged one.
+    for i in range(nout):
+        if not np.isfinite(fstar[i]):
+            return 3
+
     for i in range(nout):
         if fstar[i] != 0.0:
             return 0
@@ -348,6 +357,14 @@ def _eval_jac_resid(fn_addr, x, nout, njac, args):
 @njit
 def jac_residual_status(fn_addr, xstar, fstar, nout, njac, args):
     """``residual_status`` for the analytic-Jacobian callbacks."""
+    # A NON-FINITE residual is status 3.  This scan must come FIRST:
+    # `NaN != 0.0` is TRUE, so the nonzero test below returns 0 ("ok")
+    # on the first element of an all-NaN residual, which is how a
+    # diverged fit was reported as a converged one.
+    for i in range(nout):
+        if not np.isfinite(fstar[i]):
+            return 3
+
     for i in range(nout):
         if fstar[i] != 0.0:
             return 0

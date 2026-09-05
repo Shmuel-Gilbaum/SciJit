@@ -21,7 +21,7 @@ copyright = "2026, Shmuel Gilbaum"
 # The dev tree and the public release carry different versions. The
 # projection rewrites the `release` line below; keep it on one line so
 # that stays simple.
-release = "0.1.4"
+release = "0.1.5"
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ----------------------------------------------------
